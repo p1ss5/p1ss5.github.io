@@ -27,7 +27,7 @@ button{font:inherit;cursor:pointer}
 #stage{position:fixed;inset:0;background:#000;overflow:hidden}
 body.editing #stage{display:none}
 #board{position:absolute;left:50%;top:50%;width:1080px;height:1440px;background:#fff;overflow:hidden;transform-origin:center center}
-.screen{position:absolute;left:0;right:0;top:0;bottom:56px;display:none;flex-direction:column;padding:26px 30px 10px}
+.screen{position:absolute;left:0;right:0;top:0;bottom:68px;display:none;flex-direction:column;padding:26px 30px 10px}
 .screen.on{display:flex}
 .hd{display:flex;align-items:center;height:136px;flex:0 0 auto;border-bottom:4px solid var(--navy);margin-bottom:14px}
 .hd .date{font-size:84px;font-weight:800;letter-spacing:-2px;white-space:nowrap;line-height:1}
@@ -89,20 +89,24 @@ body.editing #stage{display:none}
 
 /* 来客予定表 */
 .vis{flex:1;display:flex;flex-direction:column;gap:14px;min-height:0}
-.room{flex:1 1 0;display:flex;flex-direction:column;border:2px solid var(--line);border-radius:6px;overflow:hidden;min-height:0}
+.room{flex:0 0 auto;display:flex;flex-direction:column;border:2px solid var(--line);border-radius:6px;overflow:hidden}
 .room h3{margin:0;background:var(--navy2);color:#fff;font-size:36px;padding:8px 20px;letter-spacing:3px;flex:0 0 auto}
-.room .list{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:8px 10px;gap:6px;min-height:0}
-.room .v{display:grid;grid-template-columns:150px 1fr 280px;gap:8px;flex:0 1 74px;min-height:0}
+.room.small{border-color:#d5dce4}
+.room.small h3{background:#eef1f5;color:#7a8592;font-size:28px;padding:8px 20px;display:flex;justify-content:space-between}
+.room.small h3 span{font-size:24px;letter-spacing:1px}
+.room .list{display:flex;flex-direction:column;padding:8px 10px;gap:6px}
+.room .v{display:grid;grid-template-columns:4.6em 1fr 300px;gap:8px}
+.novis{flex:1;display:grid;place-items:center;font-size:84px;font-weight:800;color:#98a2ae;letter-spacing:8px;border:4px dashed var(--line);border-radius:14px}
 .room .v div{display:flex;align-items:center;background:var(--cell);border:1px solid var(--line);border-radius:4px;padding:0 16px;font-weight:700}
 .room .v .t{justify-content:center;font-variant-numeric:tabular-nums}
 .room .v .h{background:#fff4d6;border-color:#e6cf8f}
 .room .none{color:#98a2ae;font-size:34px;font-weight:700;padding:14px 12px}
 
 /* フッター */
-#foot{position:absolute;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:14px;padding:0 30px;border-top:1px solid var(--line);background:#f6f8fa}
+#foot{position:absolute;left:0;right:0;bottom:0;height:68px;display:flex;align-items:center;gap:14px;padding:0 30px;border-top:1px solid var(--line);background:#f6f8fa}
 #dots{display:flex;gap:10px;flex:1}
-#dots span{font-size:22px;color:#98a2ae;font-weight:700;padding:4px 12px;border-radius:14px}
-#dots span.on{background:var(--navy);color:#fff}
+#dots button{font-size:26px;color:var(--sub);font-weight:700;padding:6px 22px;border-radius:24px;border:1px solid var(--line);background:#fff;min-height:50px}
+#dots button.on{background:var(--navy);border-color:var(--navy);color:#fff}
 #clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--sub)}
 #toEdit{font-size:22px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--sub)}
 
@@ -319,7 +323,7 @@ function renderSchedule() {
   // 内勤メンバーは、その日に行動を書いた人がいるときだけ枠を出す
   const inner = S.staffInner.filter(nm => { const e = entryFor(nm, t); return e && (e.dest || e.back); });
   const n = rowsMain + (rowsTokyo ? rowsTokyo + 1 : 0) + (inner.length ? inner.length + 1 : 0);
-  const avail = 1440 - 56 - 26 - 10 - 150 - 62 - 110;
+  const avail = 1440 - 68 - 26 - 10 - 150 - 62 - 110;
   const rowH = (avail - 6 * n) / Math.max(n, 1);
   const fs = Math.max(22, Math.min(46, rowH * 0.56));
   const row = name => {
@@ -366,7 +370,7 @@ function renderSales() {
     // 16行を超えたら左右2列に分けて、31日まで大きな文字のまま収める
     const two = keys.length > 16, half = Math.ceil(keys.length / 2);
     const cols = two ? [keys.slice(0, half), keys.slice(half)] : [keys];
-    const avail = 975 - (two ? 32 : 0);   // 表の行に使える高さ（見出し・合計欄・単位の行を除く）
+    const avail = 963 - (two ? 32 : 0);   // 表の行に使える高さ（見出し・合計欄・単位の行を除く）
     const rowH = Math.min(62, avail / cols[0].length - 5);
     const fs = Math.max(20, Math.min(two ? 30 : 36, rowH * 0.6));
     const [y, mo] = ym.split('-').map(Number);
@@ -390,15 +394,24 @@ function renderSales() {
 function renderVisitors() {
   const t = dispDay(), list = (S.visitors[t] || []).slice().sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
   let h = header('来客予定表', t, t !== today() ? '翌営業日の予定' : '') + `<div class="vis">`;
+  const per = S.rooms.map((r, i) => list.filter(v => v.room === i && (v.co || v.host || v.t)));
+  const total = per.reduce((a, l) => a + l.length, 0);
   if (!S.rooms.length) h += `<div class="empty">「入力」→「設定」で部屋を入れてください</div>`;
-  S.rooms.forEach((r, i) => {
-    const vs = list.filter(v => v.room === i && (v.co || v.host || v.t));
-    const fs = vs.length > 3 ? 28 : 34;
-    h += `<div class="room"><h3>${esc(r)}</h3><div class="list">`;
-    h += vs.length ? vs.map(v => `<div class="v" style="font-size:${fs}px"><div class="t">${esc(v.t || '')}</div><div class="fit">${esc(v.co || '')}</div><div class="h fit">${esc(v.host || '')}</div></div>`).join('')
-                   : `<div class="none">予定なし</div>`;
-    h += `</div></div>`;
-  });
+  else if (!total) h += `<div class="novis">来客予定なし</div>`;
+  else {
+    // 予定のない部屋は1行に小さくまとめ、空いた高さを予定のある部屋の文字に回す
+    const full = per.filter(l => l.length).length, empty = S.rooms.length - full;
+    const avail = 1170 - empty * 74 - full * 100;
+    const rowH = Math.max(52, Math.min(150, avail / total - 6));
+    const fs = Math.max(26, Math.min(58, rowH * 0.42));
+    S.rooms.forEach((r, i) => {
+      const vs = per[i];
+      if (!vs.length) { h += `<div class="room small"><h3>${esc(r)}<span>予定なし</span></h3></div>`; return; }
+      h += `<div class="room"><h3>${esc(r)}</h3><div class="list">` +
+        vs.map(v => `<div class="v" style="height:${rowH}px;font-size:${fs}px"><div class="t">${esc(v.t || '')}</div><div class="fit">${esc(v.co || '')}</div><div class="h fit">${esc(v.host || '')}</div></div>`).join('') +
+        `</div></div>`;
+    });
+  }
   $('#sc-visitors').innerHTML = h + `</div>`;
 }
 /* はみ出す文字は自動で縮小する */
@@ -410,7 +423,7 @@ function shrink(root) {
   });
 }
 
-let cur = 0, shownAt = 0, forced = null;
+let cur = 0, shownAt = 0, forced = null, manual = null;
 function cycleList() {
   if (forced) return [forced];
   const st = S.settings;
@@ -421,13 +434,26 @@ function cycleList() {
 function showScreen() {
   const l = cycleList();
   if (cur >= l.length) cur = 0;
-  const id = l[cur];
+  const id = manual || l[cur];
   ({schedule: renderSchedule, sales: renderSales, visitors: renderVisitors})[id]();
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 'sc-' + id));
   shrink($('#sc-' + id));
-  $('#dots').innerHTML = l.length > 1 ? l.map((k, i) => `<span class="${i === cur ? 'on' : ''}">${SCREENS[k]}</span>`).join('') : '';
+  $('#dots').innerHTML = tabList().map(k => `<button data-scr="${k}" class="${k === id ? 'on' : ''}">${SCREENS[k]}</button>`).join('');
   shownAt = Date.now();
 }
+/* 下のタブ：自動切り替えなら切り替え対象の画面、固定表示なら3画面すべて */
+function tabList() {
+  const st = S.settings;
+  const l = Object.keys(SCREENS).filter(k => st.mode !== 'auto' || st.screens[k]);
+  return l.length > 1 ? l : [];
+}
+$('#dots').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const l = cycleList(), i = l.indexOf(b.dataset.scr);
+  if (i >= 0) { cur = i; manual = null; }   // 自動切り替えの順番はここから続ける
+  else manual = b.dataset.scr;              // 固定表示中は、しばらく見せてから元の画面に戻す
+  showScreen();
+});
 function fit() {
   const r = Number(S.settings.rotate) || 0, side = r !== 0;
   const W = side ? innerHeight : innerWidth, H = side ? innerWidth : innerHeight;
@@ -439,7 +465,8 @@ function tick() {
   $('#clock').textContent = d.getHours() + ':' + pad(d.getMinutes());
   if (document.body.classList.contains('editing')) return;
   const l = cycleList(), sec = Math.max(5, Number(S.settings.interval) || 20);
-  if (l.length > 1 && Date.now() - shownAt >= sec * 1000) { cur = (cur + 1) % l.length; showScreen(); }
+  if (manual) { if (Date.now() - shownAt >= Math.max(60, sec) * 1000) { manual = null; showScreen(); } }
+  else if (l.length > 1 && Date.now() - shownAt >= sec * 1000) { cur = (cur + 1) % l.length; showScreen(); }
   else if (Date.now() - shownAt >= 60000) showScreen();   // 固定表示でも1分ごとに日付・内容を更新
 }
 let wake = null;
