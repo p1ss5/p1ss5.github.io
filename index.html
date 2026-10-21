@@ -37,6 +37,10 @@ body.editing #stage{display:none}
 .hd .dow b{background:var(--navy);color:#fff;font-size:62px;width:92px;height:92px;display:grid;place-items:center;border-radius:6px}
 .hd .dow b.sat{background:var(--blue)} .hd .dow b.sun{background:var(--red)}
 .fit{white-space:nowrap;overflow:hidden}
+.hd .title.wb{font-size:62px;letter-spacing:8px;display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.hd .badge{font-size:28px;letter-spacing:2px;background:#f0b429;color:#222;border-radius:22px;padding:3px 22px;margin-top:6px}
+.hd.next{border-bottom-color:#f0b429}
+.hd.next .date{color:#9a5b00}
 
 /* 行動予定表 */
 .sch{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0}
@@ -140,6 +144,15 @@ body.editing #editor{display:block}
 .opt label{display:flex;align-items:center;gap:6px;min-height:40px}
 .opt input{width:22px;height:22px}
 .note-s{color:var(--sub);font-size:14px;margin:6px 0 0}
+.ubtn{min-width:150px}
+.ubtn.set{background:#fff4d6;border-color:#e6cf8f}
+.upanel{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px;padding:8px;background:#f3f6f9;border-radius:8px}
+.upanel .b{min-width:96px}
+.upanel .b.off{color:var(--red);background:#fbeeee}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#sugg{position:absolute;z-index:20;display:none;flex-wrap:wrap;gap:6px;max-width:min(640px,94vw);background:#fff;border:1px solid #b7c2cf;border-radius:10px;padding:8px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+#sugg.on{display:flex}
+#sugg button{font:inherit;font-size:16px;min-height:42px;padding:6px 12px;border:1px solid #c9d3de;border-radius:8px;background:#f6f8fa;font-weight:700}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:20px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
 #toast.on{opacity:.92}
 @media (max-width:700px){.grid2{grid-template-columns:1fr}.vrow{grid-template-columns:90px 1fr}.srow{grid-template-columns:60px 1fr 1fr}}
@@ -187,12 +200,67 @@ const man = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP') + ' 万
 const val = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP');
 const $ = s => document.querySelector(s);
 
+/* ---------- 営業日（土日・祝日・会社の休業日を除く） ---------- */
+const holidayCache = {};
+function jpHolidays(y) {
+  if (holidayCache[y]) return holidayCache[y];
+  const set = new Set(), add = (m, d) => set.add(ymd(new Date(y, m - 1, d)));
+  const nthMon = (m, n) => 1 + ((8 - new Date(y, m - 1, 1).getDay()) % 7) + (n - 1) * 7;
+  [[1, 1], [2, 11], [2, 23], [4, 29], [5, 3], [5, 4], [5, 5], [8, 11], [11, 3], [11, 23]].forEach(([m, d]) => add(m, d));
+  add(1, nthMon(1, 2)); add(7, nthMon(7, 3)); add(9, nthMon(9, 3)); add(10, nthMon(10, 2));
+  const b = y - 1980;
+  add(3, Math.floor(20.8431 + 0.242194 * b - Math.floor(b / 4)));   // 春分の日
+  add(9, Math.floor(23.2488 + 0.242194 * b - Math.floor(b / 4)));   // 秋分の日
+  // 国民の休日（祝日に挟まれた日）
+  for (const k of [...set]) {
+    const d = parse(k); d.setDate(d.getDate() + 2);
+    if (set.has(ymd(d))) { d.setDate(d.getDate() - 1); if (d.getDay() !== 0) set.add(ymd(d)); }
+  }
+  // 振替休日（日曜日の祝日の次の、祝日でない日）
+  for (const k of [...set].sort()) {
+    const d = parse(k);
+    if (d.getDay() === 0) { do d.setDate(d.getDate() + 1); while (set.has(ymd(d))); set.add(ymd(d)); }
+  }
+  return holidayCache[y] = set;
+}
+function companyOff() {
+  const s = new Set();
+  for (const l of S.offdays || []) { const m = l.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); if (m) s.add(m[1] + '-' + pad(m[2]) + '-' + pad(m[3])); }
+  return s;
+}
+function isBiz(k) {
+  const d = parse(k), w = d.getDay();
+  return w !== 0 && w !== 6 && !jpHolidays(d.getFullYear()).has(k) && !companyOff().has(k);
+}
+function nextBiz(k) {
+  const d = parse(k);
+  for (let i = 0; i < 60; i++) { d.setDate(d.getDate() + 1); if (isBiz(ymd(d))) break; }
+  return ymd(d);
+}
+function hasPlan(k) {
+  return Object.values(S.schedule[k] || {}).some(e => e.dest || e.back) || (S.visitors[k] || []).some(v => v.co || v.host);
+}
+/* 翌営業日の行動予定・来客予定が入力されたら、行動予定表と来客予定表はその日を表示する */
+function dispDay() {
+  const t = today(), n = nextBiz(t);
+  return hasPlan(n) ? n : t;
+}
+/* 売上推移表：今月の入力がまだ無いうちは、前月（前営業日まで）を表示し続ける */
+function salesMonth() {
+  const ym = today().slice(0, 7), has = k => Object.keys((S.sales[k] || {}).days || {}).length > 0;
+  if (has(ym)) return ym;
+  const d = parse(today()); d.setDate(0);
+  const prev = ymd(d).slice(0, 7);
+  return has(prev) ? prev : ym;
+}
+
 /* ---------- データ ---------- */
 function defaults() {
   return {
     settings: {rotate: 0, interval: 20, mode: 'auto', screens: {schedule: true, sales: true, visitors: true}},
-    staffMain: [], staffTokyo: [], hosts: [], rooms: [],
-    quick: ['休み', '内勤', '県内'],
+    staffMain: [], staffTokyo: [], staffInner: [], hosts: [], rooms: [],
+    words: {dest: [], co: [], host: []},
+    quick: ['休み', '内勤', '県内'], offdays: [],
     schedule: {}, notes: {}, visitors: {}, sales: {}
   };
 }
@@ -201,7 +269,12 @@ function load() {
   let raw = null;
   try { raw = localStorage.getItem(KEY); } catch (e) {}
   if (raw) {
-    try { S = Object.assign(defaults(), JSON.parse(raw)); S.settings = Object.assign(defaults().settings, S.settings); return; } catch (e) {}
+    try {
+      S = Object.assign(defaults(), JSON.parse(raw));
+      S.settings = Object.assign(defaults().settings, S.settings);
+      S.words = Object.assign(defaults().words, S.words);
+      return;
+    } catch (e) {}
   }
   S = defaults();
   if (DEMO) seedDemo();
@@ -215,6 +288,7 @@ function prune() {
   const lim = new Date(); lim.setDate(lim.getDate() - 90);
   const k = ymd(lim);
   for (const t of ['schedule', 'notes', 'visitors']) for (const d in S[t]) if (d < k) delete S[t][d];
+  S.offdays = (S.offdays || []).filter(d => d >= k);
 }
 const DEMO = false; function seedDemo() {}
 
@@ -232,16 +306,19 @@ function entryFor(name, day) {
 }
 
 /* ---------- 表示モード ---------- */
-function header(title) {
-  const d = new Date(), w = d.getDay();
-  return `<div class="hd"><div class="date">${d.getMonth() + 1}<small>月</small>${d.getDate()}<small>日</small></div>
-    <div class="title">${title}</div>
+function header(title, k, badge) {
+  const d = k ? parse(k) : new Date(), w = d.getDay();
+  // 日付を指定して札を付けたとき（＝翌営業日の表示）は、見出しを黄色にして今日と区別する
+  return `<div class="hd${badge && k ? ' next' : ''}"><div class="date">${d.getMonth() + 1}<small>月</small>${d.getDate()}<small>日</small></div>
+    <div class="title${badge ? ' wb' : ''}">${title}${badge ? `<span class="badge">${badge}</span>` : ''}</div>
     <div class="dow"><b class="${w === 6 ? 'sat' : w === 0 ? 'sun' : ''}">${DOW[w]}</b>曜日</div></div>`;
 }
 function renderSchedule() {
-  const t = today();
+  const t = dispDay();
   const rowsMain = S.staffMain.length, rowsTokyo = S.staffTokyo.length;
-  const n = rowsMain + (rowsTokyo ? rowsTokyo + 1 : 0);
+  // 内勤メンバーは、その日に行動を書いた人がいるときだけ枠を出す
+  const inner = S.staffInner.filter(nm => { const e = entryFor(nm, t); return e && (e.dest || e.back); });
+  const n = rowsMain + (rowsTokyo ? rowsTokyo + 1 : 0) + (inner.length ? inner.length + 1 : 0);
   const avail = 1440 - 56 - 26 - 10 - 150 - 62 - 110;
   const rowH = (avail - 6 * n) / Math.max(n, 1);
   const fs = Math.max(22, Math.min(46, rowH * 0.56));
@@ -254,33 +331,37 @@ function renderSchedule() {
     }
     return `<div class="r"><div class="c nm fit">${esc(name)}</div><div class="c ds fit">${ds}</div><div class="c bk fit">${e && e.back ? esc(e.back) : '－'}</div></div>`;
   };
-  let h = header('行動予定表') + `<div class="sch" style="font-size:${fs}px">
+  let h = header('行動予定表', t, t !== today() ? '翌営業日の予定' : '') + `<div class="sch" style="font-size:${fs}px">
     <div class="r th"><div>氏名</div><div>行先</div><div style="letter-spacing:2px">帰社時間</div></div>`;
   h += S.staffMain.map(row).join('');
   if (rowsTokyo) {
     h += `<div class="sep"></div><div class="r grp"><div class="c nm fit">東京営業所</div><div class="c ds"></div><div class="c bk"></div></div>`;
     h += S.staffTokyo.map(row).join('');
   }
+  if (inner.length) {
+    h += `<div class="sep"></div><div class="r grp"><div class="c nm fit">内勤</div><div class="c ds"></div><div class="c bk"></div></div>`;
+    h += inner.map(row).join('');
+  }
   if (!n) h += `<div class="empty">「入力」→「設定」で名簿を入れてください</div>`;
   h += `<div class="note"><div class="c nm">備考欄</div><div class="c ds">${esc(S.notes[t] || '')}</div></div></div>`;
   $('#sc-schedule').innerHTML = h;
 }
 function renderSales() {
-  const t = today(), ym = t.slice(0, 7), m = S.sales[ym] || {days: {}};
+  const ym = salesMonth(), m = S.sales[ym] || {days: {}};
   const target = num(m.target);
   const keys = Object.keys(m.days).map(Number).sort((a, b) => a - b);
   const rate = c => (target && num(c) != null) ? (num(c) / target * 100).toFixed(1) + ' %' : '－';
   const last = keys.length ? m.days[keys[keys.length - 1]] : null;
   const orderSum = keys.reduce((a, k) => a + (num(m.days[k].o) || 0), 0);
   const pct = (target && last && num(last.c) != null) ? Math.min(100, num(last.c) / target * 100) : 0;
-  let h = header('売上推移表') + `<div class="sum">
+  let h = header('売上推移表', null, Number(ym.slice(5)) + '月分') + `<div class="sum">
     <div><span>月目標</span><b>${man(m.target)}</b></div>
     <div><span>当月受注 合計</span><b>${keys.length ? man(orderSum) : '－'}</b></div>
     <div><span>当月累計売上</span><b>${last ? man(last.c) : '－'}</b></div>
     <div class="rate"><span>遂行率</span><b>${last ? rate(last.c) : '－'}</b></div></div>
     <div class="bar"><i style="width:${pct}%"></i></div>`;
   if (!keys.length) {
-    h += `<div class="empty">今月の入力はまだありません</div>`;
+    h += `<div class="empty">まだ入力がありません</div>`;
   } else {
     // 16行を超えたら左右2列に分けて、31日まで大きな文字のまま収める
     const two = keys.length > 16, half = Math.ceil(keys.length / 2);
@@ -295,7 +376,7 @@ function renderSales() {
       for (const k of col) {
         const w = new Date(y, mo - 1, k).getDay(), e = m.days[k];
         // 2列のときは曜日を省き、土日は日付の色で見分ける
-        h += `<div class="r${k === new Date().getDate() ? ' today' : ''}" style="height:${rowH}px;font-size:${fs}px">
+        h += `<div class="r${k === keys[keys.length - 1] ? ' today' : ''}" style="height:${rowH}px;font-size:${fs}px">
           <div class="${w === 6 ? 'sat' : w === 0 ? 'sun' : ''}">${k}日${two ? '' : `<small>(${DOW[w]})</small>`}</div>
           <div>${two ? val(e.o) : man(e.o)}</div><div>${two ? val(e.c) : man(e.c)}</div><div>${two ? rate(e.c).replace(' ', '') : rate(e.c)}</div></div>`;
       }
@@ -307,8 +388,8 @@ function renderSales() {
   $('#sc-sales').innerHTML = h;
 }
 function renderVisitors() {
-  const t = today(), list = (S.visitors[t] || []).slice().sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
-  let h = header('来客予定表') + `<div class="vis">`;
+  const t = dispDay(), list = (S.visitors[t] || []).slice().sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
+  let h = header('来客予定表', t, t !== today() ? '翌営業日の予定' : '') + `<div class="vis">`;
   if (!S.rooms.length) h += `<div class="empty">「入力」→「設定」で部屋を入れてください</div>`;
   S.rooms.forEach((r, i) => {
     const vs = list.filter(v => v.room === i && (v.co || v.host || v.t));
@@ -374,7 +455,9 @@ function startDisplay() {
 let tab = 'schedule', edDay = today(), edMonth = today().slice(0, 7);
 function startEdit() {
   document.body.classList.add('editing');
-  edDay = today(); edMonth = edDay.slice(0, 7);
+  // 行動予定・来客予定は前日の午後に書くので、12時以降は翌営業日を開く
+  edDay = new Date().getHours() >= 12 ? nextBiz(today()) : today();
+  edMonth = today().slice(0, 7);
   renderEditor();
 }
 function toast(msg) {
@@ -384,8 +467,8 @@ function toast(msg) {
 function dayBar() {
   const d = parse(edDay), w = d.getDay();
   return `<div class="daybar"><button class="b" data-dshift="-1">◀ 前日</button><input type="date" id="edDay" value="${edDay}">
-    <button class="b" data-dshift="1">翌日 ▶</button><button class="b" data-dtoday>今日</button>
-    <span class="lbl">${d.getMonth() + 1}月${d.getDate()}日（${DOW[w]}）${edDay === today() ? '・今日' : ''}</span></div>`;
+    <button class="b" data-dshift="1">翌日 ▶</button><button class="b" data-dtoday>今日</button><button class="b" data-dnext>翌営業日</button>
+    <span class="lbl">${d.getMonth() + 1}月${d.getDate()}日（${DOW[w]}）${edDay === today() ? '・今日' : edDay === nextBiz(today()) ? '・翌営業日' : ''}${isBiz(edDay) ? '' : '・休業日'}</span></div>`;
 }
 function renderEditor() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -398,25 +481,25 @@ function renderEditor() {
       return `<div class="erow" data-name="${esc(name)}"><div class="en">${esc(name)}</div><div>
         <div class="l"><input type="text" class="i-dest" placeholder="行先" value="${esc(e.dest || '')}">
           ${S.quick.map(q => `<button class="b" data-q="${esc(q)}">${esc(q)}</button>`).join('')}<button class="b del" data-clear>消す</button></div>
-        <div class="l">～<input type="date" class="i-until" value="${esc(e.until || '')}">
+        <div class="l">～<input type="hidden" class="i-until" value="${esc(e.until || '')}"><button class="b ubtn${e.until ? ' set' : ''}" data-upick>${e.until ? md(e.until) + '(' + DOW[parse(e.until).getDay()] + ')まで' : '日付なし'}</button>
           帰社 <input type="text" class="i-back" placeholder="17:00" value="${esc(e.back || '')}"><button class="b" data-back="直帰">直帰</button> ${hint}</div>
       </div></div>`;
     };
+    const group = (ttl, list) => list.length ? `<div class="grpttl">${ttl}</div>${list.map(row).join('')}` : '';
     P.innerHTML = `<div class="card">${dayBar()}
-      <p class="note-s">入力した内容はすぐに保存されます。「～」に日付を入れると、その日まで毎日自動で表示されます。</p></div>
+      <p class="note-s">入力した内容はすぐに保存されます。「～」に日付を入れると、その日まで毎日自動で表示されます。<br>
+      翌営業日の予定を1件でも入れると、行動予定表と来客予定表は翌営業日の表示に切り替わります。</p></div>
       <div class="card" id="ed-schedule"><h2>本社</h2>${S.staffMain.map(row).join('')}
-      ${S.staffTokyo.length ? `<div class="grpttl">東京営業所</div>${S.staffTokyo.map(row).join('')}` : ''}</div>
+      ${group('東京営業所', S.staffTokyo)}${group('内勤（書いた人だけ表示されます）', S.staffInner)}</div>
       <div class="card"><h2>備考欄</h2><textarea id="i-note" style="min-height:80px">${esc(S.notes[edDay] || '')}</textarea></div>`;
   } else if (tab === 'visitors') {
     const list = S.visitors[edDay] || [];
-    const hosts = [...S.hosts, ...S.staffMain, ...S.staffTokyo];
-    P.innerHTML = `<div class="card">${dayBar()}<p class="note-s">時間・来客の会社名・対応する社員を部屋ごとに入力します。対応欄は候補から選ぶか、自由に入力できます。</p></div>
-      <datalist id="hostlist">${hosts.map(h => `<option value="${esc(h)}">`).join('')}</datalist>` +
+    P.innerHTML = `<div class="card">${dayBar()}<p class="note-s">時間・来客の会社名・対応する社員を部屋ごとに入力します。会社名と対応欄は、入力欄を押すと候補が出ます。</p></div>` +
       S.rooms.map((r, ri) => `<div class="card"><h2>${esc(r)}</h2>` +
         list.map((v, i) => v.room === ri ? `<div class="vrow" data-i="${i}">
           <input type="text" class="v-t" placeholder="10:00" value="${esc(v.t || '')}">
           <input type="text" class="v-co" placeholder="来客の会社名" value="${esc(v.co || '')}">
-          <input type="text" class="v-host" placeholder="対応する人" list="hostlist" value="${esc(v.host || '')}">
+          <input type="text" class="v-host" placeholder="対応する人" value="${esc(v.host || '')}">
           <button class="b del" data-vdel="${i}">削除</button></div>` : '').join('') +
         `<button class="b" data-vadd="${ri}">＋ 予定を追加</button></div>`).join('');
   } else if (tab === 'sales') {
@@ -454,10 +537,20 @@ function renderEditor() {
       <div class="card"><h2>名簿・部屋（1行に1つ）</h2><div class="grid2">
         <label>本社<textarea id="o-main">${esc(S.staffMain.join('\n'))}</textarea></label>
         <label>東京営業所<textarea id="o-tokyo">${esc(S.staffTokyo.join('\n'))}</textarea></label>
+        <label>内勤（行動を書いた日だけ表示）<textarea id="o-inner">${esc(S.staffInner.join('\n'))}</textarea></label>
         <label>来客対応の候補（社員以外）<textarea id="o-hosts">${esc(S.hosts.join('\n'))}</textarea></label>
         <label>部屋<textarea id="o-rooms">${esc(S.rooms.join('\n'))}</textarea></label>
         <label>行先のボタン<textarea id="o-quick">${esc(S.quick.join('\n'))}</textarea></label></div>
         <p class="note-s">部屋の順番を入れ替えると、入力済みの来客予定の部屋もずれます。名前を変えると、その人の入力済みの予定は表示されなくなります。</p></div>
+      <div class="card"><h2>会社の休業日（土日・祝日以外）</h2>
+        <div class="form"><label>休みの日（連休なら初日）<input type="date" id="off-a"></label><label>連休の最終日（1日だけなら空欄）<input type="date" id="off-b"></label>
+          <button class="b p" id="off-add">追加</button></div>
+        <p class="note-s">土日と祝日は自動で休みとして扱います。夏季休業・年末年始など、会社独自の休みを追加してください。×で取り消せます。</p>
+        <div class="chips">${(S.offdays || []).filter(k => k >= today()).map(k => `<button class="b" data-offdel="${k}">${md(k)}(${DOW[parse(k).getDay()]}) ×</button>`).join('') || '<span class="note-s">登録はありません</span>'}</div></div>
+      <div class="card"><h2>入力候補（1行に1つ）</h2>
+        <p class="note-s" style="margin:0 0 8px">一度入力した言葉は自動でここに登録され、入力欄を押したときに候補として出ます。前もって登録したり、不要なものを消したりできます。</p>
+        <div class="grid2"><label>行先<textarea id="o-wdest">${esc(S.words.dest.join('\n'))}</textarea></label>
+        <label>来客の会社名<textarea id="o-wco">${esc(S.words.co.join('\n'))}</textarea></label></div></div>
       <div class="card"><h2>バックアップ</h2><p class="note-s" style="margin:0 0 8px">データはこのiPadの中だけに保存されています。月に1回程度、書き出してください。</p>
         <button class="b" id="o-export">データを書き出す</button>
         <label class="b" style="display:inline-flex;align-items:center;border:1px solid #b7c2cf;border-radius:8px;padding:8px 14px;font-weight:700;min-height:44px">データを読み込む<input type="file" id="o-import" accept=".json,application/json" style="display:none"></label>
@@ -486,9 +579,21 @@ $('#panel').addEventListener('click', e => {
   const row = b.closest('.erow');
   if (b.dataset.dshift) { const d = parse(edDay); d.setDate(d.getDate() + Number(b.dataset.dshift)); edDay = ymd(d); renderEditor(); }
   else if ('dtoday' in b.dataset) { edDay = today(); renderEditor(); }
+  else if ('dnext' in b.dataset) { edDay = nextBiz(today()); renderEditor(); }
   else if (row && 'q' in b.dataset) { row.querySelector('.i-dest').value = b.dataset.q; saveRow(row); renderEditor(); toast('保存しました'); }
   else if (row && 'clear' in b.dataset) { row.querySelectorAll('input').forEach(i => i.value = ''); saveRow(row); renderEditor(); toast('消しました'); }
   else if (row && b.dataset.back) { row.querySelector('.i-back').value = b.dataset.back; saveRow(row); toast('保存しました'); }
+  else if (row && 'upick' in b.dataset) { untilPanel(row); }
+  else if (row && 'uset' in b.dataset) { row.querySelector('.i-until').value = b.dataset.uset; saveRow(row); renderEditor(); toast('保存しました'); }
+  else if (b.id === 'off-add') {
+    let a = $('#off-a').value, z = $('#off-b').value || a;
+    if (!a) { toast('休みの日を選んでください'); return; }
+    if (z < a) [a, z] = [z, a];
+    const set = new Set(S.offdays), d = parse(a);
+    for (let i = 0; i < 60 && ymd(d) <= z; i++) { set.add(ymd(d)); d.setDate(d.getDate() + 1); }
+    S.offdays = [...set].sort(); save(); renderEditor(); toast('休業日を追加しました');
+  }
+  else if (b.dataset.offdel) { S.offdays = S.offdays.filter(k => k !== b.dataset.offdel); save(); renderEditor(); toast('取り消しました'); }
   else if (b.dataset.vadd) { (S.visitors[edDay] = S.visitors[edDay] || []).push({room: Number(b.dataset.vadd), t: '', co: '', host: ''}); save(); renderEditor(); }
   else if (b.dataset.vdel) { S.visitors[edDay].splice(Number(b.dataset.vdel), 1); save(); renderEditor(); toast('削除しました'); }
   else if (b.id === 's-add') {
@@ -507,6 +612,7 @@ $('#panel').addEventListener('click', e => {
 });
 $('#panel').addEventListener('input', e => {
   const el = e.target, row = el.closest('.erow');
+  if (catOf(el)) showSugg(el);
   if (row) { saveRow(row); return; }
   if (el.id === 'i-note') { S.notes[edDay] = el.value; save(); return; }
   const vr = el.closest('.vrow');
@@ -514,12 +620,14 @@ $('#panel').addEventListener('input', e => {
   if (el.id === 's-target') { const m = S.sales[edMonth] = S.sales[edMonth] || {target: '', days: {}}; m.target = num(el.value); save(); return; }
   if (el.id === 'o-int') { S.settings.interval = Math.max(5, Number(el.value) || 20); save(); return; }
   const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
-  const map = {'o-main': 'staffMain', 'o-tokyo': 'staffTokyo', 'o-hosts': 'hosts', 'o-rooms': 'rooms', 'o-quick': 'quick'};
+  const map = {'o-main': 'staffMain', 'o-tokyo': 'staffTokyo', 'o-inner': 'staffInner', 'o-hosts': 'hosts', 'o-rooms': 'rooms', 'o-quick': 'quick'};
   if (map[el.id]) { S[map[el.id]] = lines(el.value); save(); }
+  else if (el.id === 'o-wdest') { S.words.dest = lines(el.value); save(); }
+  else if (el.id === 'o-wco') { S.words.co = lines(el.value); save(); }
 });
 $('#panel').addEventListener('change', e => {
-  const el = e.target, row = el.closest('.erow');
-  if (row && el.classList.contains('i-until')) { saveRow(row); renderEditor(); toast('保存しました'); return; }
+  const el = e.target;
+  if (catOf(el)) { addWord(catOf(el), el.value); return; }   // 入力し終えた言葉を候補に登録
   if (el.id === 'edDay' && el.value) { edDay = el.value; renderEditor(); }
   else if (el.id === 'edMonth' && el.value) { edMonth = el.value; renderEditor(); }
   else if (el.name === 'mode') { S.settings.mode = el.value; save(); }
@@ -533,6 +641,65 @@ $('#panel').addEventListener('change', e => {
     }).catch(() => toast('読み込めませんでした（ファイルを確認してください）'));
   }
 });
+
+/* 「～いつまで」は日付ボタンから選ぶ（iPadの日付入力は開いた瞬間に今日が入ってしまうため使わない） */
+function untilPanel(row) {
+  const old = row.querySelector('.upanel');
+  if (old) { old.remove(); return; }
+  const d = parse(edDay);
+  let h = '<div class="upanel"><button class="b" data-uset="">日付なし</button>';
+  for (let i = 0; i < 21; i++) {
+    d.setDate(d.getDate() + 1);
+    const k = ymd(d), w = d.getDay();
+    h += `<button class="b${!isBiz(k) ? ' off' : ''}" data-uset="${k}">${d.getMonth() + 1}/${d.getDate()}(${DOW[w]})</button>`;
+  }
+  row.querySelector('.i-until').parentNode.insertAdjacentHTML('afterend', h + '</div>');
+}
+
+/* 入力候補（一度入力した言葉を覚えて、入力欄を押したときに出す） */
+function catOf(el) {
+  const c = el.classList;
+  return !c ? null : c.contains('i-dest') ? 'dest' : c.contains('v-co') ? 'co' : c.contains('v-host') ? 'host' : null;
+}
+function addWord(cat, w) {
+  w = (w || '').trim();
+  if (!w || S.quick.includes(w)) return;
+  const l = S.words[cat] = (S.words[cat] || []).filter(x => x !== w);
+  l.unshift(w); if (l.length > 300) l.length = 300;
+  save();
+}
+function candidates(cat) {
+  if (cat === 'host') return [...new Set([...S.hosts, ...S.words.host, ...S.staffMain, ...S.staffTokyo, ...S.staffInner])];
+  return S.words[cat] || [];
+}
+const sugg = document.createElement('div');
+sugg.id = 'sugg'; document.body.appendChild(sugg);
+let suggFor = null;
+function hideSugg() { sugg.classList.remove('on'); suggFor = null; }
+function showSugg(el) {
+  const cat = catOf(el); if (!cat) return hideSugg();
+  const q = el.value.trim();
+  const list = candidates(cat).filter(w => w !== q && (!q || w.includes(q))).slice(0, 12);
+  if (!list.length) return hideSugg();
+  suggFor = el;
+  sugg.innerHTML = list.map(w => `<button type="button" data-w="${esc(w)}">${esc(w)}</button>`).join('');
+  const r = el.getBoundingClientRect();
+  sugg.style.left = (r.left + scrollX) + 'px';
+  sugg.style.top = (r.bottom + scrollY + 4) + 'px';
+  sugg.classList.add('on');
+}
+sugg.addEventListener('pointerdown', e => e.preventDefault());   // 候補を押しても入力欄から外れないようにする
+sugg.addEventListener('mousedown', e => e.preventDefault());
+sugg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !suggFor) return;
+  const el = suggFor;
+  el.value = b.dataset.w;
+  el.dispatchEvent(new Event('input', {bubbles: true}));
+  addWord(catOf(el), el.value);
+  hideSugg(); el.blur(); toast('保存しました');
+});
+$('#panel').addEventListener('focusin', e => showSugg(e.target));
+$('#panel').addEventListener('focusout', () => setTimeout(() => { if (!document.activeElement || !catOf(document.activeElement)) hideSugg(); }, 200));
 
 /* ---------- 起動 ---------- */
 load(); prune(); save();
