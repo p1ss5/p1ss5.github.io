@@ -61,8 +61,8 @@ body.editing #stage{display:none}
 .sch .note .ds{background:#fff;border:2px solid var(--line);font-size:32px;white-space:normal;line-height:1.25}
 
 /* 売上推移表 */
-.kpi{display:flex;gap:16px;flex:0 0 auto;height:262px;margin-bottom:14px}
-.kpi-l{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+.kpi{display:flex;gap:16px;flex:0 0 auto;height:262px;margin-bottom:26px}
+.kpi-l{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;overflow:hidden}
 .kpi-l > div{border-radius:8px;padding:10px 20px;display:flex;flex-direction:column;justify-content:center}
 .kpi-l span{font-size:26px;font-weight:700;color:var(--sub)}
 .kpi-l b{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -70,7 +70,7 @@ body.editing #stage{display:none}
 .kpi .k1 b{font-size:42px}
 .kpi .k2{flex:1;background:var(--navy);color:#fff}
 .kpi .k2 span{color:#cfe0f5}
-.kpi .k2 b{font-size:86px;line-height:1.1}
+.kpi .k2 b{font-size:80px;line-height:1}
 .kpi .k2 small{font-size:36px}
 .donut{position:relative;flex:0 0 262px;height:262px}
 .donut svg{width:100%;height:100%;display:block}
@@ -367,7 +367,7 @@ function renderSales() {
   const last = keys.length ? m.days[keys[keys.length - 1]] : null;
   const hasRate = !!(target && last && num(last.c) != null);
   const pct = hasRate ? num(last.c) / target * 100 : 0;
-  // 達成率のドーナツ（100%を超えたら輪は満タンのまま、数字は実際の値）
+  // 遂行率のドーナツ（100%を超えたら輪は満タンのまま、数字は実際の値）
   const R = 100, C = 2 * Math.PI * R, len = Math.min(100, pct) / 100 * C;
   const donut = `<svg viewBox="0 0 240 240" aria-hidden="true">
       <circle cx="120" cy="120" r="${R}" fill="none" stroke="#dfe5ec" stroke-width="30"/>
@@ -378,20 +378,20 @@ function renderSales() {
       <div class="k1"><span>今月の目標</span><b>${man(m.target)}</b></div>
       <div class="k2"><span>当月累計売上</span><b>${last && num(last.c) != null ? val(last.c) + '<small> 万円</small>' : '－'}</b></div>
     </div>
-    <div class="donut">${donut}<div class="dc"><span>達成率</span><b>${hasRate ? pct.toFixed(1) + '<small>%</small>' : '－'}</b></div></div></div>`;
+    <div class="donut">${donut}<div class="dc"><span>遂行率</span><b>${hasRate ? pct.toFixed(1) + '<small>%</small>' : '－'}</b></div></div></div>`;
   if (!keys.length) {
     h += `<div class="empty">まだ入力がありません</div>`;
   } else {
     // 16行を超えたら左右2列に分けて、31日まで大きな文字のまま収める
     const two = keys.length > 16, half = Math.ceil(keys.length / 2);
     const cols = two ? [keys.slice(0, half), keys.slice(half)] : [keys];
-    const avail = 839 - (two ? 32 : 0);   // 表の行に使える高さ（見出し・合計欄・単位の行を除く）
+    const avail = 827 - (two ? 32 : 0);   // 表の行に使える高さ（見出し・合計欄・単位の行を除く）
     const rowH = Math.min(62, avail / cols[0].length - 5);
     const fs = Math.max(20, Math.min(two ? 30 : 36, rowH * 0.6));
     const [y, mo] = ym.split('-').map(Number);
     h += `<div class="sal${two ? ' two' : ''}">`;
     for (const col of cols) {
-      h += `<div class="col"><div class="r th"><div>日</div><div>当月受注</div><div>${two ? '累計売上' : '当月累計売上'}</div><div>達成率</div></div>`;
+      h += `<div class="col"><div class="r th"><div>日</div><div>当月受注</div><div>${two ? '累計売上' : '当月累計売上'}</div><div>遂行率</div></div>`;
       for (const k of col) {
         const w = new Date(y, mo - 1, k).getDay(), e = m.days[k];
         // 2列のときは曜日を省き、土日は日付の色で見分ける
@@ -554,7 +554,7 @@ function renderEditor() {
     P.innerHTML = `<div class="card"><div class="daybar"><input type="month" id="edMonth" value="${edMonth}">
         <span class="lbl">${y}年${mo}月</span></div>
       <div class="form" style="margin-top:10px"><label>今月の目標（万円）<input type="number" id="s-target" inputmode="numeric" value="${esc(m.target ?? '')}"></label></div>
-      <p class="note-s">達成率 ＝ 当月累計売上 ÷ 今月の目標 で自動計算します。目標が決まるまでは空欄のままにしてください（目標・達成率は「－」で表示されます）。</p></div>
+      <p class="note-s">遂行率 ＝ 当月累計売上 ÷ 今月の目標 で自動計算します。目標が決まるまでは空欄のままにしてください（目標・遂行率は「－」で表示されます）。</p></div>
       <div class="card"><h2>日々の数字を入力（単位：万円）</h2><div class="form">
         <label>日<select id="s-day">${Array.from({length: dim}, (_, i) => i + 1).map(dd => `<option ${dd === defDay ? 'selected' : ''}>${dd}</option>`).join('')}</select></label>
         <label>当月受注<input type="number" id="s-o" inputmode="numeric"></label>
