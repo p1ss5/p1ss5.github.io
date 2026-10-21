@@ -1,0 +1,10 @@
+{
+  "name": "社内掲示ボード",
+  "short_name": "社内ボード",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#1d4b7c",
+  "icons": [{"src": "icon-180.png", "sizes": "180x180", "type": "image/png"}]
+}

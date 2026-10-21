@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="社内ボード">
+<!-- 外部への通信を一切禁止（データはこのiPadのlocalStorageにだけ保存） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>社内掲示ボード</title>
+<style>
+:root{
+  --navy:#1d4b7c; --navy2:#2d6197; --cell:#e8edf3; --name:#f3f5f7; --line:#c5cfda;
+  --ink:#161b22; --sub:#5b6673; --red:#c0181f; --gray:#b9c1cb; --label:#cfe0f5; --blue:#1f5fbf;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;color:var(--ink);background:#000;-webkit-text-size-adjust:100%}
+button{font:inherit;cursor:pointer}
+
+/* ===== 表示モード ===== */
+#stage{position:fixed;inset:0;background:#000;overflow:hidden}
+body.editing #stage{display:none}
+#board{position:absolute;left:50%;top:50%;width:1080px;height:1440px;background:#fff;overflow:hidden;transform-origin:center center}
+.screen{position:absolute;left:0;right:0;top:0;bottom:56px;display:none;flex-direction:column;padding:26px 30px 10px}
+.screen.on{display:flex}
+.hd{display:flex;align-items:center;height:136px;flex:0 0 auto;border-bottom:4px solid var(--navy);margin-bottom:14px}
+.hd .date{font-size:84px;font-weight:800;letter-spacing:-2px;white-space:nowrap;line-height:1}
+.hd .date small{font-size:46px;font-weight:700;margin:0 2px}
+.hd .title{flex:1;text-align:center;font-size:74px;font-weight:800;letter-spacing:10px;border-left:2px solid var(--line);margin-left:24px;white-space:nowrap}
+.hd .dow{display:flex;align-items:center;gap:8px;font-size:40px;font-weight:700;white-space:nowrap}
+.hd .dow b{background:var(--navy);color:#fff;font-size:62px;width:92px;height:92px;display:grid;place-items:center;border-radius:6px}
+.hd .dow b.sat{background:var(--blue)} .hd .dow b.sun{background:var(--red)}
+.fit{white-space:nowrap;overflow:hidden}
+
+/* 行動予定表 */
+.sch{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0}
+.sch .r{display:grid;grid-template-columns:230px 1fr 230px;gap:8px;flex:1 1 0;min-height:0}
+.sch .r.th{flex:0 0 62px}
+.sch .r.th div{background:var(--navy);color:#fff;font-weight:700;display:grid;place-items:center;font-size:34px;letter-spacing:8px}
+.sch .c{display:flex;align-items:center;border-radius:4px;font-weight:700}
+.sch .nm{justify-content:center;background:var(--name);border:2px solid var(--line);font-weight:800;letter-spacing:4px}
+.sch .ds{background:var(--cell);border:1px solid var(--line);padding:0 24px}
+.sch .ds .until{color:var(--sub);margin-left:.8em;font-weight:600}
+.sch .ds .red{color:var(--red)}
+.sch .bk{background:var(--gray);justify-content:center}
+.sch .grp .nm{background:var(--label);border-color:#b4cbe6;color:var(--navy);letter-spacing:2px;font-size:.72em}
+.sch .grp .ds,.sch .grp .bk{background:transparent;border:none}
+.sch .sep{border-top:2px solid #9aa7b5;margin:2px 0}
+.sch .note{flex:0 0 96px;display:grid;grid-template-columns:230px 1fr;gap:8px;margin-top:6px}
+.sch .note .nm{background:var(--label);border-color:#b4cbe6;color:var(--navy);font-size:30px;letter-spacing:4px}
+.sch .note .ds{background:#fff;border:2px solid var(--line);font-size:32px;white-space:normal;line-height:1.25}
+
+/* 売上推移表 */
+.sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:0 0 auto;margin-bottom:10px}
+.sum div{background:var(--cell);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+.sum span{display:block;font-size:24px;color:var(--sub);font-weight:700}
+.sum b{display:block;font-size:40px;text-align:right;white-space:nowrap}
+.sum .rate{background:var(--navy);color:#fff;border-color:var(--navy)}
+.sum .rate span{color:#cfe0f5}
+.bar{height:22px;background:#dfe5ec;border-radius:11px;overflow:hidden;margin-bottom:14px;flex:0 0 auto}
+.bar i{display:block;height:100%;background:var(--navy2)}
+.sal{flex:1;display:flex;gap:14px;min-height:0}
+.sal .col{flex:1;min-width:0}
+.sal .r div{white-space:nowrap;overflow:hidden}
+.sal.two .r{grid-template-columns:84px 1fr 1.1fr 132px;gap:4px}
+.sal.two .r div{padding:0 12px}
+.sal.two .r div.sat{color:var(--blue)} .sal.two .r div.sun{color:var(--red)}
+.sal.two .r.th div{font-size:24px;letter-spacing:1px}
+.unit{flex:0 0 auto;text-align:right;font-size:22px;color:var(--sub);font-weight:700}
+.sal .r{display:grid;grid-template-columns:170px 1fr 1fr 200px;gap:6px;margin-bottom:5px}
+.sal .r div{display:flex;align-items:center;justify-content:flex-end;padding:0 22px;background:var(--cell);border:1px solid var(--line);border-radius:4px;font-weight:700;font-variant-numeric:tabular-nums}
+.sal .r div:first-child{justify-content:center;background:var(--name)}
+.sal .r.th div{background:var(--navy);border-color:var(--navy);color:#fff;justify-content:center;font-size:30px;height:58px;letter-spacing:4px}
+.sal .r div:first-child small{font-size:.65em;color:var(--sub);margin-left:4px}
+.sal .r div.sat small{color:var(--blue)} .sal .r div.sun small{color:var(--red)}
+.sal .r div:last-child{justify-content:center}
+.sal .r.today div{border:2px solid var(--navy2)}
+.empty{flex:1;display:grid;place-items:center;color:#98a2ae;font-size:40px;font-weight:700}
+
+/* 来客予定表 */
+.vis{flex:1;display:flex;flex-direction:column;gap:14px;min-height:0}
+.room{flex:1 1 0;display:flex;flex-direction:column;border:2px solid var(--line);border-radius:6px;overflow:hidden;min-height:0}
+.room h3{margin:0;background:var(--navy2);color:#fff;font-size:36px;padding:8px 20px;letter-spacing:3px;flex:0 0 auto}
+.room .list{flex:1;display:flex;flex-direction:column;justify-content:flex-start;padding:8px 10px;gap:6px;min-height:0}
+.room .v{display:grid;grid-template-columns:150px 1fr 280px;gap:8px;flex:0 1 74px;min-height:0}
+.room .v div{display:flex;align-items:center;background:var(--cell);border:1px solid var(--line);border-radius:4px;padding:0 16px;font-weight:700}
+.room .v .t{justify-content:center;font-variant-numeric:tabular-nums}
+.room .v .h{background:#fff4d6;border-color:#e6cf8f}
+.room .none{color:#98a2ae;font-size:34px;font-weight:700;padding:14px 12px}
+
+/* フッター */
+#foot{position:absolute;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:14px;padding:0 30px;border-top:1px solid var(--line);background:#f6f8fa}
+#dots{display:flex;gap:10px;flex:1}
+#dots span{font-size:22px;color:#98a2ae;font-weight:700;padding:4px 12px;border-radius:14px}
+#dots span.on{background:var(--navy);color:#fff}
+#clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--sub)}
+#toEdit{font-size:22px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--sub)}
+
+/* ===== 入力モード ===== */
+#editor{display:none;background:#eef1f5;min-height:100%;font-size:17px}
+body.editing{background:#eef1f5}
+body.editing #editor{display:block}
+.etop{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
+.etop h1{font-size:19px;margin:0 10px 0 0}
+.tabs{display:flex;gap:6px;flex:1;flex-wrap:wrap}
+.tabs button{border:none;border-radius:8px;padding:10px 16px;background:#3a6ea3;color:#fff;font-weight:700}
+.tabs button.on{background:#fff;color:var(--navy)}
+#toShow{border:none;border-radius:8px;padding:10px 18px;background:#f0b429;color:#222;font-weight:800}
+.panel{max-width:980px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.card h2{font-size:18px;margin:0 0 10px;color:var(--navy)}
+.ed input[type=text],.ed input[type=number],.ed input[type=date],.ed input[type=month],.ed textarea,.ed select{font:inherit;font-size:17px;padding:9px 10px;border:1px solid #b7c2cf;border-radius:8px;background:#fff;min-height:44px}
+.ed textarea{width:100%;min-height:150px}
+.ed button.b{min-height:44px;padding:8px 14px;border:1px solid #b7c2cf;border-radius:8px;background:#f6f8fa;font-weight:700}
+.ed button.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+.ed button.del{color:var(--red)}
+.daybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.daybar .lbl{font-weight:800;font-size:19px;margin-left:6px}
+.erow{display:grid;grid-template-columns:110px 1fr;gap:10px;padding:10px 0;border-top:1px solid #e3e8ee;align-items:start}
+.erow .en{font-weight:800;font-size:19px;padding-top:10px}
+.erow .l{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.erow .i-dest{flex:1 1 220px}
+.erow .i-back{width:110px}
+.hint{color:#8a5a00;background:#fff4d6;border-radius:6px;padding:4px 8px;font-size:15px}
+.grpttl{font-weight:800;color:var(--navy);margin:12px 0 0;padding:6px 10px;background:var(--label);border-radius:6px}
+.vrow{display:grid;grid-template-columns:110px 1fr 190px auto;gap:6px;margin-bottom:6px}
+.vrow input{width:100%}
+.srow{display:grid;grid-template-columns:90px 1fr 1fr 90px auto;gap:6px;align-items:center;padding:6px 0;border-top:1px solid #e3e8ee}
+.srow span{text-align:right;font-variant-numeric:tabular-nums}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--sub);font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.opt{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0}
+.opt label{display:flex;align-items:center;gap:6px;min-height:40px}
+.opt input{width:22px;height:22px}
+.note-s{color:var(--sub);font-size:14px;margin:6px 0 0}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:20px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
+#toast.on{opacity:.92}
+@media (max-width:700px){.grid2{grid-template-columns:1fr}.vrow{grid-template-columns:90px 1fr}.srow{grid-template-columns:60px 1fr 1fr}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="board">
+    <section class="screen" id="sc-schedule"></section>
+    <section class="screen" id="sc-sales"></section>
+    <section class="screen" id="sc-visitors"></section>
+    <div id="foot"><div id="dots"></div><div id="clock"></div><button id="toEdit">入力</button></div>
+  </div>
+</div>
+
+<div id="editor" class="ed">
+  <div class="etop">
+    <h1>社内掲示ボード 入力</h1>
+    <div class="tabs" id="tabs">
+      <button data-tab="schedule">行動予定</button>
+      <button data-tab="visitors">来客予定</button>
+      <button data-tab="sales">売上推移</button>
+      <button data-tab="settings">設定</button>
+    </div>
+    <button id="toShow">▶ 表示に戻る</button>
+  </div>
+  <div class="panel" id="panel"></div>
+</div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const KEY = 'kz-board-v1';
+const DOW = '日月火水木金土';
+const SCREENS = {schedule:'行動予定', sales:'売上推移', visitors:'来客予定'};
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d || 1); };
+const md = s => { const d = parse(s); return (d.getMonth() + 1) + '/' + d.getDate(); };
+const today = () => ymd(new Date());
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => (v === '' || v == null || isNaN(v)) ? null : Number(v);
+const man = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP') + ' 万円';
+const val = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP');
+const $ = s => document.querySelector(s);
+
+/* ---------- データ ---------- */
+function defaults() {
+  return {
+    settings: {rotate: 0, interval: 20, mode: 'auto', screens: {schedule: true, sales: true, visitors: true}},
+    staffMain: [], staffTokyo: [], hosts: [], rooms: [],
+    quick: ['休み', '内勤', '県内'],
+    schedule: {}, notes: {}, visitors: {}, sales: {}
+  };
+}
+let S;
+function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) {}
+  if (raw) {
+    try { S = Object.assign(defaults(), JSON.parse(raw)); S.settings = Object.assign(defaults().settings, S.settings); return; } catch (e) {}
+  }
+  S = defaults();
+  if (DEMO) seedDemo();
+  save();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { toast('保存できませんでした（ブラウザの保存領域を確認してください）'); }
+}
+function prune() {
+  const lim = new Date(); lim.setDate(lim.getDate() - 90);
+  const k = ymd(lim);
+  for (const t of ['schedule', 'notes', 'visitors']) for (const d in S[t]) if (d < k) delete S[t][d];
+}
+const DEMO = false; function seedDemo() {}
+
+/* 行動予定：当日の入力が無ければ、期限（～日付）付きの直近の入力を引き継ぐ */
+function entryFor(name, day) {
+  const own = (S.schedule[day] || {})[name];
+  if (own && (own.dest || own.back)) return Object.assign({from: day}, own);
+  const d = parse(day);
+  for (let i = 1; i <= 31; i++) {
+    d.setDate(d.getDate() - 1);
+    const k = ymd(d), e = (S.schedule[k] || {})[name];
+    if (e && e.dest) return (e.until && e.until >= day) ? {dest: e.dest, until: e.until, back: '', from: k, carried: true} : null;
+  }
+  return null;
+}
+
+/* ---------- 表示モード ---------- */
+function header(title) {
+  const d = new Date(), w = d.getDay();
+  return `<div class="hd"><div class="date">${d.getMonth() + 1}<small>月</small>${d.getDate()}<small>日</small></div>
+    <div class="title">${title}</div>
+    <div class="dow"><b class="${w === 6 ? 'sat' : w === 0 ? 'sun' : ''}">${DOW[w]}</b>曜日</div></div>`;
+}
+function renderSchedule() {
+  const t = today();
+  const rowsMain = S.staffMain.length, rowsTokyo = S.staffTokyo.length;
+  const n = rowsMain + (rowsTokyo ? rowsTokyo + 1 : 0);
+  const avail = 1440 - 56 - 26 - 10 - 150 - 62 - 110;
+  const rowH = (avail - 6 * n) / Math.max(n, 1);
+  const fs = Math.max(22, Math.min(46, rowH * 0.56));
+  const row = name => {
+    const e = entryFor(name, t);
+    let ds = '';
+    if (e && e.dest) {
+      ds = `<span class="${/休/.test(e.dest) ? 'red' : ''}">${esc(e.dest)}</span>`;
+      if (e.until && e.until > t) ds += `<span class="until">～${md(e.until)}</span>`;
+    }
+    return `<div class="r"><div class="c nm fit">${esc(name)}</div><div class="c ds fit">${ds}</div><div class="c bk fit">${e && e.back ? esc(e.back) : '－'}</div></div>`;
+  };
+  let h = header('行動予定表') + `<div class="sch" style="font-size:${fs}px">
+    <div class="r th"><div>氏名</div><div>行先</div><div style="letter-spacing:2px">帰社時間</div></div>`;
+  h += S.staffMain.map(row).join('');
+  if (rowsTokyo) {
+    h += `<div class="sep"></div><div class="r grp"><div class="c nm fit">東京営業所</div><div class="c ds"></div><div class="c bk"></div></div>`;
+    h += S.staffTokyo.map(row).join('');
+  }
+  if (!n) h += `<div class="empty">「入力」→「設定」で名簿を入れてください</div>`;
+  h += `<div class="note"><div class="c nm">備考欄</div><div class="c ds">${esc(S.notes[t] || '')}</div></div></div>`;
+  $('#sc-schedule').innerHTML = h;
+}
+function renderSales() {
+  const t = today(), ym = t.slice(0, 7), m = S.sales[ym] || {days: {}};
+  const target = num(m.target);
+  const keys = Object.keys(m.days).map(Number).sort((a, b) => a - b);
+  const rate = c => (target && num(c) != null) ? (num(c) / target * 100).toFixed(1) + ' %' : '－';
+  const last = keys.length ? m.days[keys[keys.length - 1]] : null;
+  const orderSum = keys.reduce((a, k) => a + (num(m.days[k].o) || 0), 0);
+  const pct = (target && last && num(last.c) != null) ? Math.min(100, num(last.c) / target * 100) : 0;
+  let h = header('売上推移表') + `<div class="sum">
+    <div><span>月目標</span><b>${man(m.target)}</b></div>
+    <div><span>当月受注 合計</span><b>${keys.length ? man(orderSum) : '－'}</b></div>
+    <div><span>当月累計売上</span><b>${last ? man(last.c) : '－'}</b></div>
+    <div class="rate"><span>遂行率</span><b>${last ? rate(last.c) : '－'}</b></div></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>`;
+  if (!keys.length) {
+    h += `<div class="empty">今月の入力はまだありません</div>`;
+  } else {
+    // 16行を超えたら左右2列に分けて、31日まで大きな文字のまま収める
+    const two = keys.length > 16, half = Math.ceil(keys.length / 2);
+    const cols = two ? [keys.slice(0, half), keys.slice(half)] : [keys];
+    const avail = 975 - (two ? 32 : 0);   // 表の行に使える高さ（見出し・合計欄・単位の行を除く）
+    const rowH = Math.min(62, avail / cols[0].length - 5);
+    const fs = Math.max(20, Math.min(two ? 30 : 36, rowH * 0.6));
+    const [y, mo] = ym.split('-').map(Number);
+    h += `<div class="sal${two ? ' two' : ''}">`;
+    for (const col of cols) {
+      h += `<div class="col"><div class="r th"><div>日</div><div>当月受注</div><div>${two ? '累計売上' : '当月累計売上'}</div><div>遂行率</div></div>`;
+      for (const k of col) {
+        const w = new Date(y, mo - 1, k).getDay(), e = m.days[k];
+        // 2列のときは曜日を省き、土日は日付の色で見分ける
+        h += `<div class="r${k === new Date().getDate() ? ' today' : ''}" style="height:${rowH}px;font-size:${fs}px">
+          <div class="${w === 6 ? 'sat' : w === 0 ? 'sun' : ''}">${k}日${two ? '' : `<small>(${DOW[w]})</small>`}</div>
+          <div>${two ? val(e.o) : man(e.o)}</div><div>${two ? val(e.c) : man(e.c)}</div><div>${two ? rate(e.c).replace(' ', '') : rate(e.c)}</div></div>`;
+      }
+      h += `</div>`;
+    }
+    h += `</div>`;
+    if (two) h += `<div class="unit">（単位：万円）</div>`;
+  }
+  $('#sc-sales').innerHTML = h;
+}
+function renderVisitors() {
+  const t = today(), list = (S.visitors[t] || []).slice().sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
+  let h = header('来客予定表') + `<div class="vis">`;
+  if (!S.rooms.length) h += `<div class="empty">「入力」→「設定」で部屋を入れてください</div>`;
+  S.rooms.forEach((r, i) => {
+    const vs = list.filter(v => v.room === i && (v.co || v.host || v.t));
+    const fs = vs.length > 3 ? 28 : 34;
+    h += `<div class="room"><h3>${esc(r)}</h3><div class="list">`;
+    h += vs.length ? vs.map(v => `<div class="v" style="font-size:${fs}px"><div class="t">${esc(v.t || '')}</div><div class="fit">${esc(v.co || '')}</div><div class="h fit">${esc(v.host || '')}</div></div>`).join('')
+                   : `<div class="none">予定なし</div>`;
+    h += `</div></div>`;
+  });
+  $('#sc-visitors').innerHTML = h + `</div>`;
+}
+/* はみ出す文字は自動で縮小する */
+function shrink(root) {
+  root.querySelectorAll('.fit').forEach(el => {
+    el.style.fontSize = '';
+    let fs = parseFloat(getComputedStyle(el).fontSize), n = 0;
+    while (el.scrollWidth > el.clientWidth + 1 && fs > 14 && n++ < 40) { fs -= 2; el.style.fontSize = fs + 'px'; }
+  });
+}
+
+let cur = 0, shownAt = 0, forced = null;
+function cycleList() {
+  if (forced) return [forced];
+  const st = S.settings;
+  if (st.mode !== 'auto') return [st.mode];
+  const l = Object.keys(SCREENS).filter(k => st.screens[k]);
+  return l.length ? l : ['schedule'];
+}
+function showScreen() {
+  const l = cycleList();
+  if (cur >= l.length) cur = 0;
+  const id = l[cur];
+  ({schedule: renderSchedule, sales: renderSales, visitors: renderVisitors})[id]();
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 'sc-' + id));
+  shrink($('#sc-' + id));
+  $('#dots').innerHTML = l.length > 1 ? l.map((k, i) => `<span class="${i === cur ? 'on' : ''}">${SCREENS[k]}</span>`).join('') : '';
+  shownAt = Date.now();
+}
+function fit() {
+  const r = Number(S.settings.rotate) || 0, side = r !== 0;
+  const W = side ? innerHeight : innerWidth, H = side ? innerWidth : innerHeight;
+  const s = Math.min(W / 1080, H / 1440);
+  $('#board').style.transform = `translate(-50%,-50%) rotate(${r}deg) scale(${s})`;
+}
+function tick() {
+  const d = new Date();
+  $('#clock').textContent = d.getHours() + ':' + pad(d.getMinutes());
+  if (document.body.classList.contains('editing')) return;
+  const l = cycleList(), sec = Math.max(5, Number(S.settings.interval) || 20);
+  if (l.length > 1 && Date.now() - shownAt >= sec * 1000) { cur = (cur + 1) % l.length; showScreen(); }
+  else if (Date.now() - shownAt >= 60000) showScreen();   // 固定表示でも1分ごとに日付・内容を更新
+}
+let wake = null;
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !wake && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch (e) {}
+}
+function startDisplay() {
+  document.body.classList.remove('editing');
+  cur = 0; fit(); showScreen(); keepAwake();
+}
+
+/* ---------- 入力モード ---------- */
+let tab = 'schedule', edDay = today(), edMonth = today().slice(0, 7);
+function startEdit() {
+  document.body.classList.add('editing');
+  edDay = today(); edMonth = edDay.slice(0, 7);
+  renderEditor();
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1400);
+}
+function dayBar() {
+  const d = parse(edDay), w = d.getDay();
+  return `<div class="daybar"><button class="b" data-dshift="-1">◀ 前日</button><input type="date" id="edDay" value="${edDay}">
+    <button class="b" data-dshift="1">翌日 ▶</button><button class="b" data-dtoday>今日</button>
+    <span class="lbl">${d.getMonth() + 1}月${d.getDate()}日（${DOW[w]}）${edDay === today() ? '・今日' : ''}</span></div>`;
+}
+function renderEditor() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  const P = $('#panel');
+  if (tab === 'schedule') {
+    const day = S.schedule[edDay] || {};
+    const row = name => {
+      const e = day[name] || {}, inh = entryFor(name, edDay);
+      const hint = (!e.dest && inh && inh.carried) ? `<span class="hint">${md(inh.from)}入力の「${esc(inh.dest)} ～${md(inh.until)}」を表示中</span>` : '';
+      return `<div class="erow" data-name="${esc(name)}"><div class="en">${esc(name)}</div><div>
+        <div class="l"><input type="text" class="i-dest" placeholder="行先" value="${esc(e.dest || '')}">
+          ${S.quick.map(q => `<button class="b" data-q="${esc(q)}">${esc(q)}</button>`).join('')}<button class="b del" data-clear>消す</button></div>
+        <div class="l">～<input type="date" class="i-until" value="${esc(e.until || '')}">
+          帰社 <input type="text" class="i-back" placeholder="17:00" value="${esc(e.back || '')}"><button class="b" data-back="直帰">直帰</button> ${hint}</div>
+      </div></div>`;
+    };
+    P.innerHTML = `<div class="card">${dayBar()}
+      <p class="note-s">入力した内容はすぐに保存されます。「～」に日付を入れると、その日まで毎日自動で表示されます。</p></div>
+      <div class="card" id="ed-schedule"><h2>本社</h2>${S.staffMain.map(row).join('')}
+      ${S.staffTokyo.length ? `<div class="grpttl">東京営業所</div>${S.staffTokyo.map(row).join('')}` : ''}</div>
+      <div class="card"><h2>備考欄</h2><textarea id="i-note" style="min-height:80px">${esc(S.notes[edDay] || '')}</textarea></div>`;
+  } else if (tab === 'visitors') {
+    const list = S.visitors[edDay] || [];
+    const hosts = [...S.hosts, ...S.staffMain, ...S.staffTokyo];
+    P.innerHTML = `<div class="card">${dayBar()}<p class="note-s">時間・来客の会社名・対応する社員を部屋ごとに入力します。対応欄は候補から選ぶか、自由に入力できます。</p></div>
+      <datalist id="hostlist">${hosts.map(h => `<option value="${esc(h)}">`).join('')}</datalist>` +
+      S.rooms.map((r, ri) => `<div class="card"><h2>${esc(r)}</h2>` +
+        list.map((v, i) => v.room === ri ? `<div class="vrow" data-i="${i}">
+          <input type="text" class="v-t" placeholder="10:00" value="${esc(v.t || '')}">
+          <input type="text" class="v-co" placeholder="来客の会社名" value="${esc(v.co || '')}">
+          <input type="text" class="v-host" placeholder="対応する人" list="hostlist" value="${esc(v.host || '')}">
+          <button class="b del" data-vdel="${i}">削除</button></div>` : '').join('') +
+        `<button class="b" data-vadd="${ri}">＋ 予定を追加</button></div>`).join('');
+  } else if (tab === 'sales') {
+    const m = S.sales[edMonth] || {target: '', days: {}};
+    const [y, mo] = edMonth.split('-').map(Number);
+    const keys = Object.keys(m.days).map(Number).sort((a, b) => a - b);
+    const td = new Date();
+    const defDay = (td.getFullYear() === y && td.getMonth() + 1 === mo) ? td.getDate() : 1;
+    const dim = new Date(y, mo, 0).getDate();
+    P.innerHTML = `<div class="card"><div class="daybar"><input type="month" id="edMonth" value="${edMonth}">
+        <span class="lbl">${y}年${mo}月</span></div>
+      <div class="form" style="margin-top:10px"><label>月目標（万円）<input type="number" id="s-target" inputmode="numeric" value="${esc(m.target ?? '')}"></label></div>
+      <p class="note-s">遂行率 ＝ 当月累計売上 ÷ 月目標 で自動計算します。目標が決まるまでは空欄のままにしてください（月目標・遂行率は「－」で表示されます）。</p></div>
+      <div class="card"><h2>日々の数字を入力（単位：万円）</h2><div class="form">
+        <label>日<select id="s-day">${Array.from({length: dim}, (_, i) => i + 1).map(dd => `<option ${dd === defDay ? 'selected' : ''}>${dd}</option>`).join('')}</select></label>
+        <label>当月受注<input type="number" id="s-o" inputmode="numeric"></label>
+        <label>当月累計売上<input type="number" id="s-c" inputmode="numeric"></label>
+        <button class="b p" id="s-add">登録</button></div>
+        <p class="note-s">同じ日を登録し直すと上書きされます。下の一覧の行をタップすると、入力欄に呼び出せます。</p></div>
+      <div class="card"><h2>入力済み</h2>${keys.length ? keys.map(k => `<div class="srow" data-k="${k}">
+        <b>${k}日(${DOW[new Date(y, mo - 1, k).getDay()]})</b><span>${man(m.days[k].o)}</span><span>${man(m.days[k].c)}</span>
+        <span>${num(m.target) && num(m.days[k].c) != null ? (num(m.days[k].c) / num(m.target) * 100).toFixed(1) + '%' : '－'}</span>
+        <button class="b del" data-sdel="${k}">削除</button></div>`).join('') : '<p class="note-s">まだありません</p>'}</div>`;
+  } else {
+    const st = S.settings;
+    const radio = (name, val, label, curv) => `<label><input type="radio" name="${name}" value="${val}" ${String(curv) === String(val) ? 'checked' : ''}>${label}</label>`;
+    P.innerHTML = `<div class="card"><h2>表示のしかた</h2>
+        <div class="opt">${radio('mode', 'auto', '自動で切り替える', st.mode)}${Object.keys(SCREENS).map(k => radio('mode', k, SCREENS[k] + 'に固定', st.mode)).join('')}</div>
+        <div class="form"><label>切り替えの秒数<input type="number" id="o-int" min="5" max="600" value="${st.interval}"></label></div>
+        <p class="note-s" style="margin-top:10px">自動切り替えで表示する画面</p>
+        <div class="opt">${Object.keys(SCREENS).map(k => `<label><input type="checkbox" data-scr="${k}" ${st.screens[k] ? 'checked' : ''}>${SCREENS[k]}</label>`).join('')}</div></div>
+      <div class="card"><h2>画面の向き（縦置きモニター用）</h2>
+        <div class="opt">${radio('rot', 0, '回転なし', st.rotate)}${radio('rot', 90, '右に90°', st.rotate)}${radio('rot', -90, '左に90°', st.rotate)}</div>
+        <p class="note-s">iPadを横向きで回転ロックし、モニターに正しい向きで映る方を選んでください。</p></div>
+      <div class="card"><h2>名簿・部屋（1行に1つ）</h2><div class="grid2">
+        <label>本社<textarea id="o-main">${esc(S.staffMain.join('\n'))}</textarea></label>
+        <label>東京営業所<textarea id="o-tokyo">${esc(S.staffTokyo.join('\n'))}</textarea></label>
+        <label>来客対応の候補（社員以外）<textarea id="o-hosts">${esc(S.hosts.join('\n'))}</textarea></label>
+        <label>部屋<textarea id="o-rooms">${esc(S.rooms.join('\n'))}</textarea></label>
+        <label>行先のボタン<textarea id="o-quick">${esc(S.quick.join('\n'))}</textarea></label></div>
+        <p class="note-s">部屋の順番を入れ替えると、入力済みの来客予定の部屋もずれます。名前を変えると、その人の入力済みの予定は表示されなくなります。</p></div>
+      <div class="card"><h2>バックアップ</h2><p class="note-s" style="margin:0 0 8px">データはこのiPadの中だけに保存されています。月に1回程度、書き出してください。</p>
+        <button class="b" id="o-export">データを書き出す</button>
+        <label class="b" style="display:inline-flex;align-items:center;border:1px solid #b7c2cf;border-radius:8px;padding:8px 14px;font-weight:700;min-height:44px">データを読み込む<input type="file" id="o-import" accept=".json,application/json" style="display:none"></label>
+        <button class="b del" id="o-wipe">入力データを全部消す（名簿・設定は残す）</button></div>`;
+  }
+}
+
+/* 入力モードのイベント */
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.tab; renderEditor(); scrollTo(0, 0); } });
+$('#toShow').addEventListener('click', startDisplay);
+$('#toEdit').addEventListener('click', startEdit);
+
+function saveRow(row) {
+  const name = row.dataset.name;
+  const v = {dest: row.querySelector('.i-dest').value.trim(), until: row.querySelector('.i-until').value, back: row.querySelector('.i-back').value.trim()};
+  S.schedule[edDay] = S.schedule[edDay] || {};
+  if (!v.dest && !v.until && !v.back) delete S.schedule[edDay][name]; else S.schedule[edDay][name] = v;
+  save();
+}
+$('#panel').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) {
+    const sr = e.target.closest('.srow');
+    if (sr) { const m = S.sales[edMonth], d = m.days[sr.dataset.k]; $('#s-day').value = sr.dataset.k; $('#s-o').value = d.o ?? ''; $('#s-c').value = d.c ?? ''; scrollTo(0, 0); }
+    return;
+  }
+  const row = b.closest('.erow');
+  if (b.dataset.dshift) { const d = parse(edDay); d.setDate(d.getDate() + Number(b.dataset.dshift)); edDay = ymd(d); renderEditor(); }
+  else if ('dtoday' in b.dataset) { edDay = today(); renderEditor(); }
+  else if (row && 'q' in b.dataset) { row.querySelector('.i-dest').value = b.dataset.q; saveRow(row); renderEditor(); toast('保存しました'); }
+  else if (row && 'clear' in b.dataset) { row.querySelectorAll('input').forEach(i => i.value = ''); saveRow(row); renderEditor(); toast('消しました'); }
+  else if (row && b.dataset.back) { row.querySelector('.i-back').value = b.dataset.back; saveRow(row); toast('保存しました'); }
+  else if (b.dataset.vadd) { (S.visitors[edDay] = S.visitors[edDay] || []).push({room: Number(b.dataset.vadd), t: '', co: '', host: ''}); save(); renderEditor(); }
+  else if (b.dataset.vdel) { S.visitors[edDay].splice(Number(b.dataset.vdel), 1); save(); renderEditor(); toast('削除しました'); }
+  else if (b.id === 's-add') {
+    const k = $('#s-day').value, o = $('#s-o').value, c = $('#s-c').value;
+    if (o === '' && c === '') { toast('数字を入力してください'); return; }
+    const m = S.sales[edMonth] = S.sales[edMonth] || {target: '', days: {}};
+    m.days[k] = {o: num(o), c: num(c)}; save(); renderEditor(); toast(k + '日を登録しました');
+  }
+  else if (b.dataset.sdel) { if (confirm(b.dataset.sdel + '日の数字を削除しますか？')) { delete S.sales[edMonth].days[b.dataset.sdel]; save(); renderEditor(); } }
+  else if (b.id === 'o-export') {
+    const blob = new Blob([JSON.stringify(S)], {type: 'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'board-backup-' + today().replace(/-/g, '') + '.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  else if (b.id === 'o-wipe') { if (confirm('行動予定・来客予定・売上の入力をすべて消します。よろしいですか？')) { S.schedule = {}; S.notes = {}; S.visitors = {}; S.sales = {}; save(); toast('消しました'); } }
+});
+$('#panel').addEventListener('input', e => {
+  const el = e.target, row = el.closest('.erow');
+  if (row) { saveRow(row); return; }
+  if (el.id === 'i-note') { S.notes[edDay] = el.value; save(); return; }
+  const vr = el.closest('.vrow');
+  if (vr) { const v = S.visitors[edDay][vr.dataset.i]; v.t = vr.querySelector('.v-t').value; v.co = vr.querySelector('.v-co').value; v.host = vr.querySelector('.v-host').value; save(); return; }
+  if (el.id === 's-target') { const m = S.sales[edMonth] = S.sales[edMonth] || {target: '', days: {}}; m.target = num(el.value); save(); return; }
+  if (el.id === 'o-int') { S.settings.interval = Math.max(5, Number(el.value) || 20); save(); return; }
+  const lines = v => v.split('\n').map(s => s.trim()).filter(Boolean);
+  const map = {'o-main': 'staffMain', 'o-tokyo': 'staffTokyo', 'o-hosts': 'hosts', 'o-rooms': 'rooms', 'o-quick': 'quick'};
+  if (map[el.id]) { S[map[el.id]] = lines(el.value); save(); }
+});
+$('#panel').addEventListener('change', e => {
+  const el = e.target, row = el.closest('.erow');
+  if (row && el.classList.contains('i-until')) { saveRow(row); renderEditor(); toast('保存しました'); return; }
+  if (el.id === 'edDay' && el.value) { edDay = el.value; renderEditor(); }
+  else if (el.id === 'edMonth' && el.value) { edMonth = el.value; renderEditor(); }
+  else if (el.name === 'mode') { S.settings.mode = el.value; save(); }
+  else if (el.name === 'rot') { S.settings.rotate = Number(el.value); save(); }
+  else if (el.dataset.scr) { S.settings.screens[el.dataset.scr] = el.checked; save(); }
+  else if (el.id === 'o-import' && el.files[0]) {
+    el.files[0].text().then(txt => {
+      const d = JSON.parse(txt);
+      if (!d.settings || !d.schedule) throw new Error();
+      if (confirm('今のデータを、読み込んだデータに置き換えます。よろしいですか？')) { S = Object.assign(defaults(), d); save(); renderEditor(); toast('読み込みました'); }
+    }).catch(() => toast('読み込めませんでした（ファイルを確認してください）'));
+  }
+});
+
+/* ---------- 起動 ---------- */
+load(); prune(); save();
+const hash = location.hash.slice(1);
+if (SCREENS[hash]) forced = hash;
+addEventListener('resize', fit);
+document.addEventListener('visibilitychange', () => { keepAwake(); if (!document.body.classList.contains('editing')) showScreen(); });
+if (hash === 'edit') startEdit();
+else if (!S.staffMain.length && !S.staffTokyo.length) { tab = 'settings'; startEdit(); }   // 初回は設定画面から
+else startDisplay();
+/* 一度開けば、以後はネットにつながっていなくても動くようにする */
+if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
