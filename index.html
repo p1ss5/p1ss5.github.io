@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<!-- 時刻・電池の表示（白い文字）を白い帯の上に重ねて、モニターで目立たなくする -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="社内ボード">
 <!-- 外部への通信を一切禁止（データはこのiPadのlocalStorageにだけ保存） -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; font-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
@@ -26,6 +27,9 @@ button{font:inherit;cursor:pointer}
 /* ===== 表示モード ===== */
 #stage{position:fixed;inset:0;background:#000;overflow:hidden}
 body.editing #stage{display:none}
+/* iPad上部の時刻・電池が出る部分を白く塗る（白い文字なので見えなくなる） */
+#sbar{position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top);background:#fff;z-index:3;pointer-events:none}
+body.editing #sbar{display:none}
 #board{position:absolute;left:50%;top:50%;width:1080px;height:1440px;background:#fff;overflow:hidden;transform-origin:center center}
 .screen{position:absolute;left:0;right:0;top:0;bottom:68px;display:none;flex-direction:column;padding:26px 30px 10px}
 .screen.on{display:flex}
@@ -125,7 +129,7 @@ body.fs #fsBtn,body.nofs #fsBtn{display:none}
 #editor{display:none;background:#eef1f5;min-height:100%;font-size:17px}
 body.editing{background:#eef1f5}
 body.editing #editor{display:block}
-.etop{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
+.etop{position:sticky;top:0;z-index:5;background:var(--navy);color:#fff;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;flex-wrap:wrap}
 .etop h1{font-size:19px;margin:0 10px 0 0}
 .tabs{display:flex;gap:6px;flex:1;flex-wrap:wrap}
 .tabs button{border:none;border-radius:8px;padding:10px 16px;background:#3a6ea3;color:#fff;font-weight:700}
@@ -175,6 +179,7 @@ body.editing #editor{display:block}
 </head>
 <body>
 
+<div id="sbar"></div>
 <div id="stage">
   <div id="board">
     <section class="screen" id="sc-schedule"></section>
@@ -186,7 +191,7 @@ body.editing #editor{display:block}
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力</h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v12</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -471,11 +476,16 @@ $('#dots').addEventListener('click', e => {
   else manual = b.dataset.scr;              // 固定表示中は、しばらく見せてから元の画面に戻す
   showScreen();
 });
+/* 時刻・電池の表示の高さ（ホーム画面のアプリのときだけ0より大きくなる） */
+function safeTop() { return $('#sbar').offsetHeight || 0; }
 function fit() {
   const r = Number(S.settings.rotate) || 0, side = r !== 0;
-  const W = side ? innerHeight : innerWidth, H = side ? innerWidth : innerHeight;
+  const T = safeTop(), vh = innerHeight - T;   // ボードは時刻・電池の表示の下の部分に収める
+  const W = side ? vh : innerWidth, H = side ? innerWidth : vh;
   const s = Math.min(W / 1080, H / 1440);
-  $('#board').style.transform = `translate(-50%,-50%) rotate(${r}deg) scale(${s})`;
+  const b = $('#board');
+  b.style.top = (T + vh / 2) + 'px';
+  b.style.transform = `translate(-50%,-50%) rotate(${r}deg) scale(${s})`;
 }
 function tick() {
   const d = new Date();
