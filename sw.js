@@ -1,5 +1,5 @@
 // 一度読み込んだページを iPad の中に保存し、以後はネットにつながっていなくても表示する
-const CACHE = 'board-v12';
+const CACHE = 'board-v13';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png'];
 
 self.addEventListener('install', e => {
