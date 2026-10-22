@@ -138,7 +138,7 @@ body.editing #stage{display:none}
 #night p{color:#3a3f46;font-size:34px;font-weight:700;line-height:1.6;margin:0}
 #night small{font-size:24px}
 /* クローズアップ中は、お知らせを下に出して来客の表示を隠さない */
-#zoom.on ~ #acAlert{top:auto;bottom:150px}
+#zoom.on ~ #acAlert{top:auto;bottom:86px}
 #acAlert{position:absolute;left:24px;right:24px;top:14px;z-index:6;display:none;flex-direction:column;gap:10px}
 #acAlert.on{display:flex}
 #acAlert .aa{display:flex;align-items:center;gap:18px;background:var(--red);color:#fff;border-radius:14px;padding:16px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:acblink 1.2s ease-in-out infinite}
@@ -232,7 +232,7 @@ body.editing #editor{display:block}
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v19</small></h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v20</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -320,7 +320,7 @@ function salesMonth() {
 /* ---------- データ ---------- */
 function defaults() {
   return {
-    settings: {rotate: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true},
+    settings: {rotate: 0, wide: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true},
       ac: {use: false, rooms: [], fm: 6, fd: 1, tm: 9, td: 30, lead: 30, off: 120},
       // 時間帯ごとの表示（営業日）：朝は売上、朝礼は行動予定と来客を交互、など
       prog: {use: true, rows: [
@@ -328,7 +328,7 @@ function defaults() {
         {from: '08:28', to: '08:50', scr: ['schedule', 'visitors'], sec: 18},
         {from: '08:50', to: '09:00', scr: ['sales'], sec: 20},
         {from: '09:00', to: '09:30', scr: ['schedule'], sec: 20}]},
-      zoom: {use: true, before: 15, dur: 5},
+      zoom: {use: true, before: 15, after: 5},
       remind: {use: true, at: '17:20'},
       night: {use: true, from: '19:00', to: '07:40'}},
     staffMain: [], staffTokyo: [], staffInner: [], hosts: [], rooms: [],
@@ -559,27 +559,35 @@ function nightCheck() {
   const on = !editing() && isNightNow(), el = $('#night');
   if (el.classList.contains('on') !== on) { el.classList.toggle('on', on); if (!on && !editing()) showScreen(); }
 }
-/* 来客の○分前から○分間、その部屋・来客・担当を大きく表示する（同じ時刻の来客はまとめて並べる） */
+/* 来客の○分前から来客の時刻の○分後まで、その部屋・来客・担当を大きく表示する（同じ時刻の来客はまとめて並べる） */
 const zoomOff = new Set();   // 「閉じる」を押した来客
 const zkey = v => today() + '|' + v.room + '|' + v.t + '|' + v.co;
 function zoomList() {
   const z = S.settings.zoom;
   if (!z.use || editing() || isNightNow()) return [];
-  const nm = nowMin(), before = Number(z.before) || 15, dur = Math.max(1, Number(z.dur) || 5);
+  const nm = nowMin(), before = Number(z.before) || 15, after = Math.max(0, Number(z.after ?? 5) || 0);
   return (S.visitors[today()] || []).filter(v => v.co || v.host).map(v => ({v, m: toMin(v.t)}))
-    .filter(x => x.m != null && nm >= x.m - before && nm < x.m - before + dur && !zoomOff.has(zkey(x.v)))
+    .filter(x => x.m != null && nm >= x.m - before && nm < x.m + after && !zoomOff.has(zkey(x.v)))
     .sort((a, b) => a.m - b.m || a.v.room - b.v.room);
 }
 function zoomCheck() {
   const l = zoomList(), n = l.length, el = $('#zoom');
   const fs = n <= 1 ? 124 : n === 2 ? 88 : n === 3 ? 64 : 48;
-  const h = !n ? '' : `<div class="zh">まもなくご来客です</div><div class="zl" style="--fs:${fs}px">` + l.map(x => `<div class="zc">
+  const head = n && l.every(x => nowMin() >= x.m) ? 'ご来客の時刻です' : 'まもなくご来客です';
+  const h = !n ? '' : `<div class="zh">${head}</div><div class="zl" style="--fs:${fs}px">` + l.map(x => `<div class="zc">
       <div class="zr fit">${esc(S.rooms[x.v.room] || '')}</div>
       <div class="zt">${esc(x.v.t)}</div>
       <div class="zco fit">${esc(x.v.co || '')}</div>
       <div class="zho fit">担当　${esc(x.v.host || '')}</div></div>`).join('') +
     `</div><button class="zx" data-zclose>閉じる</button>`;
   if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!n); if (n) shrink(el); }
+  zpad();
+}
+/* クローズアップ中にお知らせが出たら、お知らせの高さだけ来客の表示を上に詰める（担当や「閉じる」を隠さない） */
+function zpad() {
+  const a = $('#acAlert'), z = $('#zoom');
+  const p = z.classList.contains('on') && a.classList.contains('on') ? (a.offsetHeight + 36) + 'px' : '';
+  if (z.style.paddingBottom !== p) { z.style.paddingBottom = p; if (z.classList.contains('on')) shrink(z); }
 }
 /* 入力忘れ：営業日の設定時刻を過ぎても、翌営業日の行動予定・本日の売上が無ければ知らせる */
 function remindHtml(nm) {
@@ -620,6 +628,7 @@ function acCheck() {
   }
   const el = $('#acAlert');
   if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!h); shrink(el); }
+  zpad();
 }
 $('#board').addEventListener('click', e => {
   if (e.target.closest('#night')) { wakeUntil = Date.now() + 10 * 60000; nightCheck(); return; }
@@ -677,7 +686,10 @@ function fit() {
   const r = Number(S.settings.rotate) || 0, side = r !== 0;
   const W = side ? innerHeight : innerWidth, H = side ? innerWidth : innerHeight;
   const s = Math.min(W / 1080, H / 1440);
-  $('#board').style.transform = `translate(-50%,-50%) rotate(${r}deg) scale(${s})`;
+  // モニターが映像を横に引き伸ばす（フルスクリーン）とき：表を横1200で作り、iPad上で縮めておくと、モニターで正しい比率になる
+  const bw = Number(S.settings.wide) ? 1200 : 1080, b = $('#board');
+  b.style.width = bw + 'px';
+  b.style.transform = `translate(-50%,-50%) rotate(${r}deg) scale(${s * 1080 / bw},${s})`;
 }
 function tick() {
   const d = new Date();
@@ -800,7 +812,7 @@ function renderEditor() {
       <div class="card"><h2>自動のお知らせ・夜間</h2>
         <div class="opt"><label><input type="checkbox" data-set="zoom.use" ${st.zoom.use ? 'checked' : ''}>来客の前に、部屋・来客・担当を大きく表示する</label></div>
         <div class="form"><label>来客の何分前から<input type="number" data-set="zoom.before" min="1" max="120" value="${st.zoom.before}"></label>
-          <label>何分間表示するか<input type="number" data-set="zoom.dur" min="1" max="60" value="${st.zoom.dur}"></label></div>
+          <label>来客の時刻の何分後まで<input type="number" data-set="zoom.after" min="0" max="60" value="${st.zoom.after}"></label></div>
         <p class="note-s">同じ時刻に来客が複数あるときは、まとめて並べて表示します。どの画面を表示していても切り替わり、時間がたつと元の表示に戻ります。「閉じる」で早めに戻せます。</p>
         <div class="opt" style="margin-top:14px"><label><input type="checkbox" data-set="remind.use" ${st.remind.use ? 'checked' : ''}>入力忘れを知らせる（営業日）</label></div>
         <div class="form"><label>この時刻を過ぎても未入力なら知らせる<input type="time" data-set="remind.at" value="${esc(st.remind.at)}"></label></div>
@@ -811,7 +823,10 @@ function renderEditor() {
         <p class="note-s">休みの日（土日・祝日・会社の休業日）は一日中休みます。休んでいる間も、画面をタッチすると10分間表示します。</p></div>
       <div class="card"><h2>画面の向き（縦置きモニター用）</h2>
         <div class="opt">${radio('rot', 0, '回転なし', st.rotate)}${radio('rot', 90, '右に90°', st.rotate)}${radio('rot', -90, '左に90°', st.rotate)}</div>
-        <p class="note-s">iPadを横向きで回転ロックし、モニターに正しい向きで映る方を選んでください。</p></div>
+        <p class="note-s">iPadを横向きで回転ロックし、モニターに正しい向きで映る方を選んでください。</p>
+        <h2 style="margin-top:18px">モニターの左右の黒い帯</h2>
+        <div class="opt">${radio('wide', 0, 'そのまま（モニターの画面拡大が「アスペクト比固定」）', Number(st.wide) || 0)}${radio('wide', 1, '左右いっぱいに広げる（モニターの画面拡大を「フルスクリーン」にしたとき）', Number(st.wide) || 0)}</div>
+        <p class="note-s">「左右いっぱいに広げる」は、モニター側を「フルスクリーン」にしてから選んでください。モニターで丸い形（遂行率のグラフ）が縦長や横長に見えなければ正しい設定です。</p></div>
       <div class="card"><h2>名簿・部屋（1行に1つ）</h2><div class="grid2">
         <label>本社<textarea id="o-main">${esc(S.staffMain.join('\n'))}</textarea></label>
         <label>東京営業所<textarea id="o-tokyo">${esc(S.staffTokyo.join('\n'))}</textarea></label>
@@ -925,6 +940,7 @@ $('#panel').addEventListener('change', e => {
   else if (el.name === 'mode') { S.settings.mode = el.value; save(); }
   else if (el.name === 'schsz') { S.settings.schSize = el.value; save(); }
   else if (el.name === 'rot') { S.settings.rotate = Number(el.value); save(); }
+  else if (el.name === 'wide') { S.settings.wide = Number(el.value); save(); }
   else if (el.dataset.scr) { S.settings.screens[el.dataset.scr] = el.checked; save(); }
   else if (el.dataset.set) {
     const [a, k] = el.dataset.set.split('.');
