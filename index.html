@@ -117,7 +117,9 @@ body.editing #stage{display:none}
 #dots button{font-size:26px;color:var(--sub);font-weight:700;padding:6px 22px;border-radius:24px;border:1px solid var(--line);background:#fff;min-height:50px}
 #dots button.on{background:var(--navy);border-color:var(--navy);color:#fff}
 #clock{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--sub)}
-#toEdit{font-size:22px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--sub)}
+#toEdit,#fsBtn{font-size:22px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--sub)}
+#fsBtn{background:#f0b429;border-color:#f0b429;color:#222;font-weight:700}
+body.fs #fsBtn,body.nofs #fsBtn{display:none}
 
 /* ===== 入力モード ===== */
 #editor{display:none;background:#eef1f5;min-height:100%;font-size:17px}
@@ -178,7 +180,7 @@ body.editing #editor{display:block}
     <section class="screen" id="sc-schedule"></section>
     <section class="screen" id="sc-sales"></section>
     <section class="screen" id="sc-visitors"></section>
-    <div id="foot"><div id="dots"></div><div id="clock"></div><button id="toEdit">入力</button></div>
+    <div id="foot"><div id="dots"></div><div id="clock"></div><button id="fsBtn">全画面</button><button id="toEdit">入力</button></div>
   </div>
 </div>
 
@@ -502,10 +504,29 @@ function startEdit() {
   edMonth = today().slice(0, 7);
   renderEditor();
 }
-function toast(msg) {
+function toast(msg, ms) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
-  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1400);
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), ms || 1400);
 }
+
+/* 全画面表示：iPad上部の時刻・電池などの表示を消して、モニターに映らないようにする
+   （入力するときは全画面を解除し、表示に戻るときにもう一度全画面にする） */
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const fsReq = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+const fsExit = document.exitFullscreen || document.webkitExitFullscreen;
+function enterFS() {
+  if (!fsReq || fsEl()) return;
+  try { const p = fsReq.call(document.documentElement); if (p && p.catch) p.catch(() => toast('全画面にできませんでした', 3000)); } catch (e) {}
+}
+function exitFS() {
+  if (!fsExit || !fsEl()) return;
+  try { const p = fsExit.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+}
+function fsChanged() { document.body.classList.toggle('fs', !!fsEl()); fit(); }
+if (!fsReq) document.body.classList.add('nofs');   // 全画面に対応していないときはボタンを出さない
+document.addEventListener('fullscreenchange', fsChanged);
+document.addEventListener('webkitfullscreenchange', fsChanged);
+$('#fsBtn').addEventListener('click', enterFS);
 function dayBar() {
   const d = parse(edDay), w = d.getDay();
   return `<div class="daybar"><button class="b" data-dshift="-1">◀ 前日</button><input type="date" id="edDay" value="${edDay}">
@@ -602,8 +623,8 @@ function renderEditor() {
 
 /* 入力モードのイベント */
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { tab = b.dataset.tab; renderEditor(); scrollTo(0, 0); } });
-$('#toShow').addEventListener('click', startDisplay);
-$('#toEdit').addEventListener('click', startEdit);
+$('#toShow').addEventListener('click', () => { startDisplay(); enterFS(); });
+$('#toEdit').addEventListener('click', () => { exitFS(); startEdit(); });
 
 function saveRow(row) {
   const name = row.dataset.name;
@@ -752,6 +773,7 @@ document.addEventListener('visibilitychange', () => { keepAwake(); if (!document
 if (hash === 'edit') startEdit();
 else if (!S.staffMain.length && !S.staffTokyo.length) { tab = 'settings'; startEdit(); }   // 初回は設定画面から
 else startDisplay();
+if (fsReq && !document.body.classList.contains('editing')) toast('右下の「全画面」を押すと、時刻・電池の表示が消えます', 8000);
 /* 一度開けば、以後はネットにつながっていなくても動くようにする */
 if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 tick(); setInterval(tick, 1000);
