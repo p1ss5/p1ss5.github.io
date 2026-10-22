@@ -119,6 +119,26 @@ body.editing #stage{display:none}
 .acb b{font-size:24px;width:100%;white-space:nowrap;overflow:hidden}
 .acb i{font-style:normal;font-size:30px;font-weight:800}
 .acb.on{background:#1f7a3a;border-color:#1f7a3a;color:#fff}
+/* 来客のクローズアップ */
+#zoom{position:absolute;left:0;right:0;top:0;bottom:68px;z-index:5;background:#eef3f8;display:none;flex-direction:column;gap:16px;padding:26px 30px 18px}
+#zoom.on{display:flex}
+#zoom .zh{flex:0 0 auto;text-align:center;font-size:66px;font-weight:800;letter-spacing:8px;color:#fff;background:var(--navy);border-radius:14px;padding:10px;animation:zpulse 1.6s ease-in-out infinite}
+@keyframes zpulse{50%{background:var(--navy2)}}
+#zoom .zl{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px}
+#zoom .zc{flex:1;min-height:0;overflow:hidden;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto 1fr auto;gap:8px 28px;align-items:center;background:#fff;border:4px solid var(--navy2);border-radius:16px;padding:16px 26px}
+#zoom .zc > *{min-width:0}
+#zoom .zr{font-size:calc(var(--fs) * .5);grid-column:1 / 3;background:var(--navy2);color:#fff;border-radius:8px;padding:4px 18px;font-weight:800;letter-spacing:2px}
+#zoom .zt{font-size:calc(var(--fs) * .8);font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+#zoom .zco{font-size:var(--fs);font-weight:800}
+#zoom .zho{font-size:calc(var(--fs) * .7);grid-column:1 / 3;font-weight:800;background:#fff4d6;border:2px solid #e6cf8f;border-radius:8px;padding:4px 18px}
+#zoom .zx{flex:0 0 auto;align-self:center;font-size:30px;font-weight:700;padding:10px 48px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--sub)}
+/* 夜間 */
+#night{position:absolute;inset:0;z-index:20;background:#000;display:none;place-items:center;text-align:center}
+#night.on{display:grid}
+#night p{color:#3a3f46;font-size:34px;font-weight:700;line-height:1.6;margin:0}
+#night small{font-size:24px}
+/* クローズアップ中は、お知らせを下に出して来客の表示を隠さない */
+#zoom.on ~ #acAlert{top:auto;bottom:150px}
 #acAlert{position:absolute;left:24px;right:24px;top:14px;z-index:6;display:none;flex-direction:column;gap:10px}
 #acAlert.on{display:flex}
 #acAlert .aa{display:flex;align-items:center;gap:18px;background:var(--red);color:#fff;border-radius:14px;padding:16px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:acblink 1.2s ease-in-out infinite}
@@ -128,6 +148,9 @@ body.editing #stage{display:none}
 @keyframes acblink{50%{background:#8f0f14}}
 #acAlert .aa.off{background:#f0b429;color:#222;animation:none}
 #acAlert .aa.off button{color:#222}
+#acAlert .aa.rm{background:#c25400;animation:rmblink 1.6s ease-in-out infinite}
+#acAlert .aa.rm button{color:#c25400}
+@keyframes rmblink{50%{background:#8a3c00}}
 .room .none{color:#98a2ae;font-size:34px;font-weight:700;padding:14px 12px}
 
 /* フッター */
@@ -151,7 +174,7 @@ body.editing #editor{display:block}
 .panel{max-width:980px;margin:0 auto;padding:16px}
 .card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .card h2{font-size:18px;margin:0 0 10px;color:var(--navy)}
-.ed input[type=text],.ed input[type=number],.ed input[type=date],.ed input[type=month],.ed textarea,.ed select{font:inherit;font-size:17px;padding:9px 10px;border:1px solid #b7c2cf;border-radius:8px;background:#fff;min-height:44px}
+.ed input[type=text],.ed input[type=number],.ed input[type=date],.ed input[type=month],.ed input[type=time],.ed textarea,.ed select{font:inherit;font-size:17px;padding:9px 10px;border:1px solid #b7c2cf;border-radius:8px;background:#fff;min-height:44px}
 .ed textarea{width:100%;min-height:150px}
 .ed button.b{min-height:44px;padding:8px 14px;border:1px solid #b7c2cf;border-radius:8px;background:#f6f8fa;font-weight:700}
 .ed button.p{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -181,6 +204,9 @@ body.editing #editor{display:block}
 .upanel{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px;padding:8px;background:#f3f6f9;border-radius:8px}
 .upanel .b{min-width:96px}
 .upanel .b.off{color:var(--red);background:#fbeeee}
+.pgrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 0;border-top:1px solid #e3e8ee}
+.pgrow label{display:flex;align-items:center;gap:4px;min-height:40px}
+.pgrow input[type=checkbox]{width:22px;height:22px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 #sugg{position:absolute;z-index:20;display:none;flex-wrap:wrap;gap:6px;max-width:min(640px,94vw);background:#fff;border:1px solid #b7c2cf;border-radius:10px;padding:8px;box-shadow:0 4px 14px rgba(0,0,0,.15)}
 #sugg.on{display:flex}
@@ -197,14 +223,16 @@ body.editing #editor{display:block}
     <section class="screen" id="sc-schedule"></section>
     <section class="screen" id="sc-sales"></section>
     <section class="screen" id="sc-visitors"></section>
+    <div id="zoom"></div>
     <div id="acAlert"></div>
+    <div id="night"><p>表示はお休み中です<br><small>画面をタッチすると10分間表示します</small></p></div>
     <div id="foot"><div id="dots"></div><div id="clock"></div><button id="toEdit">入力</button></div>
   </div>
 </div>
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v18</small></h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v19</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -293,7 +321,16 @@ function salesMonth() {
 function defaults() {
   return {
     settings: {rotate: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true},
-      ac: {use: false, rooms: [], fm: 6, fd: 1, tm: 9, td: 30, lead: 30, off: 120}},
+      ac: {use: false, rooms: [], fm: 6, fd: 1, tm: 9, td: 30, lead: 30, off: 120},
+      // 時間帯ごとの表示（営業日）：朝は売上、朝礼は行動予定と来客を交互、など
+      prog: {use: true, rows: [
+        {from: '07:40', to: '08:28', scr: ['sales'], sec: 20},
+        {from: '08:28', to: '08:50', scr: ['schedule', 'visitors'], sec: 18},
+        {from: '08:50', to: '09:00', scr: ['sales'], sec: 20},
+        {from: '09:00', to: '09:30', scr: ['schedule'], sec: 20}]},
+      zoom: {use: true, before: 15, dur: 5},
+      remind: {use: true, at: '17:20'},
+      night: {use: true, from: '19:00', to: '07:40'}},
     staffMain: [], staffTokyo: [], staffInner: [], hosts: [], rooms: [],
     words: {dest: [], co: [], host: []},
     quick: ['休み', '内勤', '県内'], offdays: [], ac: {},
@@ -308,7 +345,7 @@ function load() {
     try {
       S = Object.assign(defaults(), JSON.parse(raw));
       S.settings = Object.assign(defaults().settings, S.settings);
-      S.settings.ac = Object.assign(defaults().settings.ac, S.settings.ac);
+      for (const k of ['ac', 'prog', 'zoom', 'remind', 'night']) S.settings[k] = Object.assign(defaults().settings[k], S.settings[k]);
       S.words = Object.assign(defaults().words, S.words);
       return;
     } catch (e) {}
@@ -495,11 +532,73 @@ function toMin(s) {
   const m = String(s || '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).match(/(\d{1,2})\s*[:：時]\s*(\d{1,2})?/);
   return m ? Number(m[1]) * 60 + Number(m[2] || 0) : null;
 }
+/* ---------- 時間帯ごとの表示・来客のクローズアップ・入力忘れ・夜間 ---------- */
+const hmMin = s => { const m = String(s || '').match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+const editing = () => document.body.classList.contains('editing');
+/* 今の時刻に当てはまる「時間帯ごとの表示」（営業日だけ） */
+function activeProg() {
+  const p = S.settings.prog;
+  if (forced || !p.use || !isBiz(today())) return null;
+  const nm = nowMin();
+  const i = p.rows.findIndex(r => {
+    const f = hmMin(r.from), t = hmMin(r.to);
+    return f != null && t != null && nm >= f && nm < t && (r.scr || []).some(k => SCREENS[k]);
+  });
+  return i < 0 ? null : Object.assign({i}, p.rows[i], {scr: p.rows[i].scr.filter(k => SCREENS[k])});
+}
+/* 夜間：営業日の終了時刻から、翌営業日の開始時刻まで（休みの日は一日中）。タッチで10分間だけ表示 */
+let wakeUntil = 0;
+function isNightNow() {
+  const nt = S.settings.night;
+  if (!nt.use || Date.now() < wakeUntil) return false;
+  const nm = nowMin(), f = hmMin(nt.from) ?? 1140, t = hmMin(nt.to) ?? 460;
+  return !isBiz(today()) || nm >= f || nm < t;
+}
+function nightCheck() {
+  const on = !editing() && isNightNow(), el = $('#night');
+  if (el.classList.contains('on') !== on) { el.classList.toggle('on', on); if (!on && !editing()) showScreen(); }
+}
+/* 来客の○分前から○分間、その部屋・来客・担当を大きく表示する（同じ時刻の来客はまとめて並べる） */
+const zoomOff = new Set();   // 「閉じる」を押した来客
+const zkey = v => today() + '|' + v.room + '|' + v.t + '|' + v.co;
+function zoomList() {
+  const z = S.settings.zoom;
+  if (!z.use || editing() || isNightNow()) return [];
+  const nm = nowMin(), before = Number(z.before) || 15, dur = Math.max(1, Number(z.dur) || 5);
+  return (S.visitors[today()] || []).filter(v => v.co || v.host).map(v => ({v, m: toMin(v.t)}))
+    .filter(x => x.m != null && nm >= x.m - before && nm < x.m - before + dur && !zoomOff.has(zkey(x.v)))
+    .sort((a, b) => a.m - b.m || a.v.room - b.v.room);
+}
+function zoomCheck() {
+  const l = zoomList(), n = l.length, el = $('#zoom');
+  const fs = n <= 1 ? 124 : n === 2 ? 88 : n === 3 ? 64 : 48;
+  const h = !n ? '' : `<div class="zh">まもなくご来客です</div><div class="zl" style="--fs:${fs}px">` + l.map(x => `<div class="zc">
+      <div class="zr fit">${esc(S.rooms[x.v.room] || '')}</div>
+      <div class="zt">${esc(x.v.t)}</div>
+      <div class="zco fit">${esc(x.v.co || '')}</div>
+      <div class="zho fit">担当　${esc(x.v.host || '')}</div></div>`).join('') +
+    `</div><button class="zx" data-zclose>閉じる</button>`;
+  if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!n); if (n) shrink(el); }
+}
+/* 入力忘れ：営業日の設定時刻を過ぎても、翌営業日の行動予定・本日の売上が無ければ知らせる */
+function remindHtml(nm) {
+  const rm = S.settings.remind;
+  if (!rm.use || !isBiz(today()) || nm < (hmMin(rm.at) ?? 1040)) return '';
+  let h = '';
+  const n = nextBiz(today()), nd = parse(n), td = parse(today()), m = S.sales[today().slice(0, 7)];
+  if (!Object.values(S.schedule[n] || {}).some(e => e.dest || e.back))
+    h += `<div class="aa rm"><span class="fit">⚠ 翌営業日 ${nd.getMonth() + 1}/${nd.getDate()}（${DOW[nd.getDay()]}）の<br><b>行動予定が未入力です</b></span><button data-goedit="schedule">入力する</button></div>`;
+  if (!(m && m.days && m.days[td.getDate()]))
+    h += `<div class="aa rm"><span class="fit">⚠ 本日 ${td.getMonth() + 1}/${td.getDate()}（${DOW[td.getDay()]}）の<br><b>売上が未入力です</b></span><button data-goedit="sales">入力する</button></div>`;
+  return h;
+}
 /* 来客の○分前（設定）から来客時刻の30分後まで、エアコンがOFFならどの画面でも赤い知らせを出す */
 function acCheck() {
   let h = '';
+  if (!editing() && !isNightNow()) h += remindHtml(nowMin());
   const rs = acRooms();
-  if (rs.length && !document.body.classList.contains('editing')) {
+  if (rs.length && !editing() && !isNightNow()) {
     const now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
     const lead = Math.max(5, Number(S.settings.ac.lead) || 30);
     const after = Math.max(10, Number(S.settings.ac.off) || 120);
@@ -523,9 +622,12 @@ function acCheck() {
   if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!h); shrink(el); }
 }
 $('#board').addEventListener('click', e => {
-  const b = e.target.closest('[data-ac],[data-acon],[data-acoff]');
+  if (e.target.closest('#night')) { wakeUntil = Date.now() + 10 * 60000; nightCheck(); return; }
+  const b = e.target.closest('[data-ac],[data-acon],[data-acoff],[data-zclose],[data-goedit]');
   if (!b) return;
-  if (b.dataset.acon) acToggle(b.dataset.acon, true);
+  if ('zclose' in b.dataset) { zoomList().forEach(x => zoomOff.add(zkey(x.v))); zoomCheck(); }
+  else if (b.dataset.goedit) { tab = b.dataset.goedit; startEdit(); }
+  else if (b.dataset.acon) acToggle(b.dataset.acon, true);
   else if (b.dataset.acoff) acToggle(b.dataset.acoff, false);
   else acToggle(b.dataset.ac, !acState(b.dataset.ac).on);
 });
@@ -541,6 +643,8 @@ function shrink(root) {
 let cur = 0, shownAt = 0, forced = null, manual = null;
 function cycleList() {
   if (forced) return [forced];
+  const p = activeProg();
+  if (p) return p.scr;   // 時間帯ごとの表示を優先
   const st = S.settings;
   if (st.mode !== 'auto') return [st.mode];
   const l = Object.keys(SCREENS).filter(k => st.screens[k]);
@@ -556,10 +660,10 @@ function showScreen() {
   $('#dots').innerHTML = tabList().map(k => `<button data-scr="${k}" class="${k === id ? 'on' : ''}">${SCREENS[k]}</button>`).join('');
   shownAt = Date.now();
 }
-/* 下のタブ：自動切り替えなら切り替え対象の画面、固定表示なら3画面すべて */
+/* 下のタブ：自動切り替えなら切り替え対象の画面、固定表示・時間帯の表示中なら3画面すべて */
 function tabList() {
-  const st = S.settings;
-  const l = Object.keys(SCREENS).filter(k => st.mode !== 'auto' || st.screens[k]);
+  const st = S.settings, all = st.mode !== 'auto' || !!activeProg();
+  const l = Object.keys(SCREENS).filter(k => all || st.screens[k]);
   return l.length > 1 ? l : [];
 }
 $('#dots').addEventListener('click', e => {
@@ -578,9 +682,12 @@ function fit() {
 function tick() {
   const d = new Date();
   $('#clock').textContent = d.getHours() + ':' + pad(d.getMinutes());
-  acCheck();
-  if (document.body.classList.contains('editing')) return;
-  const l = cycleList(), sec = Math.max(5, Number(S.settings.interval) || 20);
+  nightCheck(); acCheck(); zoomCheck();
+  if (editing() || isNightNow()) return;
+  // 時間帯が変わったら、すぐその時間帯の表示に切り替える
+  const p = activeProg(), key = p ? p.i : -1;
+  if (key !== progKey) { progKey = key; cur = 0; manual = null; showScreen(); return; }
+  const l = cycleList(), sec = Math.max(5, Number(p ? p.sec : S.settings.interval) || 20);
   if (manual) { if (Date.now() - shownAt >= Math.max(60, sec) * 1000) { manual = null; showScreen(); } }
   else if (l.length > 1 && Date.now() - shownAt >= sec * 1000) { cur = (cur + 1) % l.length; showScreen(); }
   else if (Date.now() - shownAt >= 60000) showScreen();   // 固定表示でも1分ごとに日付・内容を更新
@@ -589,9 +696,13 @@ let wake = null;
 async function keepAwake() {
   try { if ('wakeLock' in navigator && !wake && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch (e) {}
 }
+let progKey = -1;
 function startDisplay() {
   document.body.classList.remove('editing');
+  wakeUntil = Date.now() + 10 * 60000;   // 入力から戻ったときは、夜間でも10分間は表示する
+  const p = activeProg(); progKey = p ? p.i : -1;
   cur = 0; fit(); showScreen(); keepAwake();
+  nightCheck(); acCheck(); zoomCheck();
 }
 
 /* ---------- 入力モード ---------- */
@@ -676,6 +787,28 @@ function renderEditor() {
         <div class="opt">${Object.keys(SCREENS).map(k => `<label><input type="checkbox" data-scr="${k}" ${st.screens[k] ? 'checked' : ''}>${SCREENS[k]}</label>`).join('')}</div>
         <p class="note-s" style="margin-top:10px">行動予定表の文字の大きさ</p>
         <div class="opt">${radio('schsz', 'm', '標準', st.schSize)}${radio('schsz', 'l', '大きめ', st.schSize)}${radio('schsz', 'xl', '特大', st.schSize)}</div></div>
+      <div class="card"><h2>時間帯ごとの表示（営業日だけ）</h2>
+        <div class="opt"><label><input type="checkbox" data-set="prog.use" ${st.prog.use ? 'checked' : ''}>使う</label></div>
+        ${st.prog.rows.map((r, i) => `<div class="pgrow" data-pg="${i}">
+          <input type="time" data-k="from" value="${esc(r.from)}">〜<input type="time" data-k="to" value="${esc(r.to)}">
+          ${Object.keys(SCREENS).map(k => `<label><input type="checkbox" data-k="scr" value="${k}" ${r.scr.includes(k) ? 'checked' : ''}>${SCREENS[k]}</label>`).join('')}
+          <label>切替<input type="number" data-k="sec" min="5" max="600" value="${r.sec}" style="width:80px">秒</label>
+          <button class="b del" data-pgdel="${i}">削除</button></div>`).join('')}
+        <button class="b" id="pg-add" style="margin-top:8px">＋ 時間帯を追加</button>
+        <p class="note-s">この時間帯は、上の「表示のしかた」より優先します。2つ以上選ぶと、切替の秒数ごとに交互に表示します。<br>
+        時間帯の途中でも、表示画面の下のタブで別の表を見られます（1分ほどで時間帯の表示に戻ります）。</p></div>
+      <div class="card"><h2>自動のお知らせ・夜間</h2>
+        <div class="opt"><label><input type="checkbox" data-set="zoom.use" ${st.zoom.use ? 'checked' : ''}>来客の前に、部屋・来客・担当を大きく表示する</label></div>
+        <div class="form"><label>来客の何分前から<input type="number" data-set="zoom.before" min="1" max="120" value="${st.zoom.before}"></label>
+          <label>何分間表示するか<input type="number" data-set="zoom.dur" min="1" max="60" value="${st.zoom.dur}"></label></div>
+        <p class="note-s">同じ時刻に来客が複数あるときは、まとめて並べて表示します。どの画面を表示していても切り替わり、時間がたつと元の表示に戻ります。「閉じる」で早めに戻せます。</p>
+        <div class="opt" style="margin-top:14px"><label><input type="checkbox" data-set="remind.use" ${st.remind.use ? 'checked' : ''}>入力忘れを知らせる（営業日）</label></div>
+        <div class="form"><label>この時刻を過ぎても未入力なら知らせる<input type="time" data-set="remind.at" value="${esc(st.remind.at)}"></label></div>
+        <p class="note-s">翌営業日の行動予定、本日の売上が入っていないと、どの画面にもお知らせが出ます。「入力する」を押すと入力画面が開きます。</p>
+        <div class="opt" style="margin-top:14px"><label><input type="checkbox" data-set="night.use" ${st.night.use ? 'checked' : ''}>夜間は表示を休む（画面を黒くする）</label></div>
+        <div class="form"><label>休む時刻（営業日）<input type="time" data-set="night.from" value="${esc(st.night.from)}"></label>
+          <label>表示を始める時刻（翌営業日の朝）<input type="time" data-set="night.to" value="${esc(st.night.to)}"></label></div>
+        <p class="note-s">休みの日（土日・祝日・会社の休業日）は一日中休みます。休んでいる間も、画面をタッチすると10分間表示します。</p></div>
       <div class="card"><h2>画面の向き（縦置きモニター用）</h2>
         <div class="opt">${radio('rot', 0, '回転なし', st.rotate)}${radio('rot', 90, '右に90°', st.rotate)}${radio('rot', -90, '左に90°', st.rotate)}</div>
         <p class="note-s">iPadを横向きで回転ロックし、モニターに正しい向きで映る方を選んでください。</p></div>
@@ -742,6 +875,8 @@ $('#panel').addEventListener('click', e => {
   else if (row && b.dataset.back) { row.querySelector('.i-back').value = b.dataset.back; saveRow(row); toast('保存しました'); }
   else if (row && 'upick' in b.dataset) { untilPanel(row); }
   else if (row && 'uset' in b.dataset) { row.querySelector('.i-until').value = b.dataset.uset; saveRow(row); renderEditor(); toast('保存しました'); }
+  else if (b.id === 'pg-add') { S.settings.prog.rows.push({from: '12:00', to: '13:00', scr: ['schedule'], sec: 20}); save(); renderEditor(); }
+  else if (b.dataset.pgdel) { S.settings.prog.rows.splice(Number(b.dataset.pgdel), 1); save(); renderEditor(); toast('削除しました'); }
   else if (b.id === 'off-add') {
     let a = $('#off-a').value, z = $('#off-b').value || a;
     if (!a) { toast('休みの日を選んでください'); return; }
@@ -791,6 +926,18 @@ $('#panel').addEventListener('change', e => {
   else if (el.name === 'schsz') { S.settings.schSize = el.value; save(); }
   else if (el.name === 'rot') { S.settings.rotate = Number(el.value); save(); }
   else if (el.dataset.scr) { S.settings.screens[el.dataset.scr] = el.checked; save(); }
+  else if (el.dataset.set) {
+    const [a, k] = el.dataset.set.split('.');
+    S.settings[a][k] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+    save();
+  }
+  else if (el.closest('.pgrow')) {
+    const r = S.settings.prog.rows[el.closest('.pgrow').dataset.pg], k = el.dataset.k, order = Object.keys(SCREENS);
+    if (k === 'scr') { r.scr = r.scr.filter(x => x !== el.value); if (el.checked) r.scr.push(el.value); r.scr.sort((a, b) => order.indexOf(a) - order.indexOf(b)); }
+    else if (k === 'sec') r.sec = Math.max(5, Number(el.value) || 20);
+    else r[k] = el.value;
+    save();
+  }
   else if (el.id === 'ac-use') { S.settings.ac.use = el.checked; save(); }
   else if (el.dataset.acroom) {
     const l = S.settings.ac.rooms.filter(r => r !== el.dataset.acroom);
