@@ -76,7 +76,10 @@ body.editing #stage{display:none}
 .donut svg{width:100%;height:100%;display:block}
 .donut .dc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .donut .dc span{font-size:26px;font-weight:700;color:var(--sub)}
-.donut .dc b{font-size:58px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.donut .dc b{font-size:58px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.donut .dc b.long{font-size:48px;letter-spacing:-1px}
+.donut .dc b.xlong{font-size:38px;letter-spacing:-1px}
+.donut .dc b.long small,.donut .dc b.xlong small{font-size:26px}
 .donut .dc small{font-size:30px}
 .sal{flex:1;display:flex;gap:14px;min-height:0}
 .sal .col{flex:1;min-width:0}
@@ -184,7 +187,7 @@ body.editing #editor{display:block}
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v14</small></h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v16</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -270,7 +273,7 @@ function salesMonth() {
 /* ---------- データ ---------- */
 function defaults() {
   return {
-    settings: {rotate: 0, interval: 20, mode: 'auto', screens: {schedule: true, sales: true, visitors: true}},
+    settings: {rotate: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true}},
     staffMain: [], staffTokyo: [], staffInner: [], hosts: [], rooms: [],
     words: {dest: [], co: [], host: []},
     quick: ['休み', '内勤', '県内'], offdays: [],
@@ -334,7 +337,9 @@ function renderSchedule() {
   const n = rowsMain + (rowsTokyo ? rowsTokyo + 1 : 0) + (inner.length ? inner.length + 1 : 0);
   const avail = 1440 - 68 - 26 - 10 - 150 - 62 - 110;
   const rowH = (avail - 6 * n) / Math.max(n, 1);
-  const fs = Math.max(22, Math.min(46, rowH * 0.56));
+  // 文字の大きさ（設定で選ぶ）：行の高さに対する文字の割合と上限
+  const [ratio, cap] = {m: [0.56, 46], l: [0.68, 54], xl: [0.8, 64]}[S.settings.schSize] || [0.68, 54];
+  const fs = Math.max(22, Math.min(cap, rowH * ratio));
   const row = name => {
     const e = entryFor(name, t);
     let ds = '';
@@ -368,17 +373,19 @@ function renderSales() {
   const hasRate = !!(target && last && num(last.c) != null);
   const pct = hasRate ? num(last.c) / target * 100 : 0;
   // 遂行率のドーナツ（100%を超えたら輪は満タンのまま、数字は実際の値）
-  const R = 100, C = 2 * Math.PI * R, len = Math.min(100, pct) / 100 * C;
+  // 輪を少し細くして中を広げ、100%以上（数字が3桁）のときは数字を小さくして輪に重ならないようにする
+  const R = 106, C = 2 * Math.PI * R, len = Math.min(100, pct) / 100 * C;
+  const pTxt = pct.toFixed(1), pCls = pTxt.length >= 6 ? 'xlong' : pTxt.length >= 5 ? 'long' : '';
   const donut = `<svg viewBox="0 0 240 240" aria-hidden="true">
-      <circle cx="120" cy="120" r="${R}" fill="none" stroke="#dfe5ec" stroke-width="30"/>
-      ${len > 0 ? `<circle cx="120" cy="120" r="${R}" fill="none" stroke="${pct >= 100 ? '#1f7a3a' : 'var(--navy2)'}" stroke-width="30" stroke-linecap="round"
+      <circle cx="120" cy="120" r="${R}" fill="none" stroke="#dfe5ec" stroke-width="24"/>
+      ${len > 0 ? `<circle cx="120" cy="120" r="${R}" fill="none" stroke="${pct >= 100 ? '#1f7a3a' : 'var(--navy2)'}" stroke-width="24" stroke-linecap="round"
         stroke-dasharray="${len} ${C}" transform="rotate(-90 120 120)"/>` : ''}</svg>`;
   let h = header('売上推移表', null, Number(ym.slice(5)) + '月分') + `<div class="kpi">
     <div class="kpi-l">
       <div class="k1"><span>今月の目標</span><b>${man(m.target)}</b></div>
       <div class="k2"><span>当月累計売上</span><b>${last && num(last.c) != null ? val(last.c) + '<small> 万円</small>' : '－'}</b></div>
     </div>
-    <div class="donut">${donut}<div class="dc"><span>遂行率</span><b>${hasRate ? pct.toFixed(1) + '<small>%</small>' : '－'}</b></div></div></div>`;
+    <div class="donut">${donut}<div class="dc"><span>遂行率</span><b class="${hasRate ? pCls : ''}">${hasRate ? pTxt + '<small>%</small>' : '－'}</b></div></div></div>`;
   if (!keys.length) {
     h += `<div class="empty">まだ入力がありません</div>`;
   } else {
@@ -572,7 +579,9 @@ function renderEditor() {
         <div class="opt">${radio('mode', 'auto', '自動で切り替える', st.mode)}${Object.keys(SCREENS).map(k => radio('mode', k, SCREENS[k] + 'に固定', st.mode)).join('')}</div>
         <div class="form"><label>切り替えの秒数<input type="number" id="o-int" min="5" max="600" value="${st.interval}"></label></div>
         <p class="note-s" style="margin-top:10px">自動切り替えで表示する画面</p>
-        <div class="opt">${Object.keys(SCREENS).map(k => `<label><input type="checkbox" data-scr="${k}" ${st.screens[k] ? 'checked' : ''}>${SCREENS[k]}</label>`).join('')}</div></div>
+        <div class="opt">${Object.keys(SCREENS).map(k => `<label><input type="checkbox" data-scr="${k}" ${st.screens[k] ? 'checked' : ''}>${SCREENS[k]}</label>`).join('')}</div>
+        <p class="note-s" style="margin-top:10px">行動予定表の文字の大きさ</p>
+        <div class="opt">${radio('schsz', 'm', '標準', st.schSize)}${radio('schsz', 'l', '大きめ', st.schSize)}${radio('schsz', 'xl', '特大', st.schSize)}</div></div>
       <div class="card"><h2>画面の向き（縦置きモニター用）</h2>
         <div class="opt">${radio('rot', 0, '回転なし', st.rotate)}${radio('rot', 90, '右に90°', st.rotate)}${radio('rot', -90, '左に90°', st.rotate)}</div>
         <p class="note-s">iPadを横向きで回転ロックし、モニターに正しい向きで映る方を選んでください。</p></div>
@@ -673,6 +682,7 @@ $('#panel').addEventListener('change', e => {
   if (el.id === 'edDay' && el.value) { edDay = el.value; renderEditor(); }
   else if (el.id === 'edMonth' && el.value) { edMonth = el.value; renderEditor(); }
   else if (el.name === 'mode') { S.settings.mode = el.value; save(); }
+  else if (el.name === 'schsz') { S.settings.schSize = el.value; save(); }
   else if (el.name === 'rot') { S.settings.rotate = Number(el.value); save(); }
   else if (el.dataset.scr) { S.settings.screens[el.dataset.scr] = el.checked; save(); }
   else if (el.id === 'o-import' && el.files[0]) {
