@@ -112,6 +112,22 @@ body.editing #stage{display:none}
 .room .v div{display:flex;align-items:center;background:var(--cell);border:1px solid var(--line);border-radius:4px;padding:0 16px;font-weight:700}
 .room .v .t{justify-content:center;font-variant-numeric:tabular-nums}
 .room .v .h{background:#fff4d6;border-color:#e6cf8f}
+/* エアコン */
+.acbar{flex:0 0 90px;display:flex;gap:12px;align-items:stretch;padding:8px 12px;background:#eef3f8;border:2px solid var(--line);border-radius:10px}
+.acbar > span{display:grid;place-items:center;font-size:24px;font-weight:800;color:var(--navy);line-height:1.2;text-align:center;flex:0 0 auto}
+.acb{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:2px;padding:4px 18px;border-radius:10px;border:3px solid #9aa7b5;background:#fff;color:var(--sub);text-align:left}
+.acb b{font-size:24px;width:100%;white-space:nowrap;overflow:hidden}
+.acb i{font-style:normal;font-size:30px;font-weight:800}
+.acb.on{background:#1f7a3a;border-color:#1f7a3a;color:#fff}
+#acAlert{position:absolute;left:24px;right:24px;top:14px;z-index:6;display:none;flex-direction:column;gap:10px}
+#acAlert.on{display:flex}
+#acAlert .aa{display:flex;align-items:center;gap:18px;background:var(--red);color:#fff;border-radius:14px;padding:16px 22px;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:acblink 1.2s ease-in-out infinite}
+#acAlert .aa span{flex:1;min-width:0;font-size:30px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden}
+#acAlert .aa b{font-size:44px}
+#acAlert .aa button{flex:0 0 auto;font-size:34px;font-weight:800;padding:18px 26px;border-radius:12px;border:none;background:#fff;color:var(--red)}
+@keyframes acblink{50%{background:#8f0f14}}
+#acAlert .aa.off{background:#f0b429;color:#222;animation:none}
+#acAlert .aa.off button{color:#222}
 .room .none{color:#98a2ae;font-size:34px;font-weight:700;padding:14px 12px}
 
 /* フッター */
@@ -181,13 +197,14 @@ body.editing #editor{display:block}
     <section class="screen" id="sc-schedule"></section>
     <section class="screen" id="sc-sales"></section>
     <section class="screen" id="sc-visitors"></section>
+    <div id="acAlert"></div>
     <div id="foot"><div id="dots"></div><div id="clock"></div><button id="toEdit">入力</button></div>
   </div>
 </div>
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v16</small></h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v18</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -215,6 +232,8 @@ const num = v => (v === '' || v == null || isNaN(v)) ? null : Number(v);
 const man = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP') + ' 万円';
 const val = v => num(v) == null ? '－' : num(v).toLocaleString('ja-JP');
 const $ = s => document.querySelector(s);
+const mOpt = v => Array.from({length: 12}, (_, i) => `<option ${i + 1 === Number(v) ? 'selected' : ''}>${i + 1}</option>`).join('');
+const dOpt = v => Array.from({length: 31}, (_, i) => `<option ${i + 1 === Number(v) ? 'selected' : ''}>${i + 1}</option>`).join('');
 
 /* ---------- 営業日（土日・祝日・会社の休業日を除く） ---------- */
 const holidayCache = {};
@@ -273,10 +292,11 @@ function salesMonth() {
 /* ---------- データ ---------- */
 function defaults() {
   return {
-    settings: {rotate: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true}},
+    settings: {rotate: 0, interval: 20, mode: 'auto', schSize: 'l', screens: {schedule: true, sales: true, visitors: true},
+      ac: {use: false, rooms: [], fm: 6, fd: 1, tm: 9, td: 30, lead: 30, off: 120}},
     staffMain: [], staffTokyo: [], staffInner: [], hosts: [], rooms: [],
     words: {dest: [], co: [], host: []},
-    quick: ['休み', '内勤', '県内'], offdays: [],
+    quick: ['休み', '内勤', '県内'], offdays: [], ac: {},
     schedule: {}, notes: {}, visitors: {}, sales: {}
   };
 }
@@ -288,6 +308,7 @@ function load() {
     try {
       S = Object.assign(defaults(), JSON.parse(raw));
       S.settings = Object.assign(defaults().settings, S.settings);
+      S.settings.ac = Object.assign(defaults().settings.ac, S.settings.ac);
       S.words = Object.assign(defaults().words, S.words);
       return;
     } catch (e) {}
@@ -303,7 +324,7 @@ function save() {
 function prune() {
   const lim = new Date(); lim.setDate(lim.getDate() - 90);
   const k = ymd(lim);
-  for (const t of ['schedule', 'notes', 'visitors']) for (const d in S[t]) if (d < k) delete S[t][d];
+  for (const t of ['schedule', 'notes', 'visitors', 'ac']) for (const d in S[t]) if (d < k) delete S[t][d];
   S.offdays = (S.offdays || []).filter(d => d >= k);
 }
 const DEMO = false; function seedDemo() {}
@@ -414,16 +435,18 @@ function renderSales() {
   $('#sc-sales').innerHTML = h;
 }
 function renderVisitors() {
-  const t = dispDay(), list = (S.visitors[t] || []).slice().sort((a, b) => (a.t || '99').localeCompare(b.t || '99'));
+  // 時刻の順に並べる（「9:00」が「10:00」より後にならないよう、分に直して比べる）
+  const t = dispDay(), list = (S.visitors[t] || []).slice().sort((a, b) => (toMin(a.t) ?? 9999) - (toMin(b.t) ?? 9999));
   let h = header('来客予定表', t, t !== today() ? '翌営業日の予定' : '') + `<div class="vis">`;
   const per = S.rooms.map((r, i) => list.filter(v => v.room === i && (v.co || v.host || v.t)));
   const total = per.reduce((a, l) => a + l.length, 0);
+  const bar = acBar();
   if (!S.rooms.length) h += `<div class="empty">「入力」→「設定」で部屋を入れてください</div>`;
   else if (!total) h += `<div class="novis">来客予定なし</div>`;
   else {
     // 予定のない部屋は1行に小さくまとめ、空いた高さを予定のある部屋の文字に回す
     const full = per.filter(l => l.length).length, empty = S.rooms.length - full;
-    const avail = 1170 - empty * 74 - full * 100;
+    const avail = 1170 - (bar ? 104 : 0) - empty * 74 - full * 100;
     const rowH = Math.max(52, Math.min(150, avail / total - 6));
     const fs = Math.max(26, Math.min(58, rowH * 0.42));
     S.rooms.forEach((r, i) => {
@@ -434,8 +457,78 @@ function renderVisitors() {
         `</div></div>`;
     });
   }
-  $('#sc-visitors').innerHTML = h + `</div>`;
+  $('#sc-visitors').innerHTML = h + bar + `</div>`;
 }
+
+/* ---------- エアコンの入れ忘れ防止（設定した時期・部屋だけ） ---------- */
+const hm = d => d.getHours() + ':' + pad(d.getMinutes());
+function acSeason(k) {
+  const a = S.settings.ac;
+  if (!a || !a.use || !(a.rooms || []).length) return false;
+  const d = parse(k), x = (d.getMonth() + 1) * 100 + d.getDate();
+  const f = a.fm * 100 + a.fd, t = a.tm * 100 + a.td;
+  return f <= t ? (x >= f && x <= t) : (x >= f || x <= t);
+}
+const acRooms = () => acSeason(today()) ? S.rooms.filter(r => S.settings.ac.rooms.includes(r)) : [];
+const acState = name => (S.ac[today()] || {})[name] || {on: false};
+/* 来客予定表の下に出す、今日のエアコンの状態（押すたびにON／OFF） */
+function acBar() {
+  const rs = acRooms();
+  if (!rs.length) return '';
+  return `<div class="acbar"><span>本日の<br>エアコン</span>` + rs.map(r => {
+    const s = acState(r);
+    return `<button class="acb${s.on ? ' on' : ''}" data-ac="${esc(r)}"><b class="fit">${esc(r)}</b>
+      <i>${s.on ? '● ON　' + esc(s.t) + '〜' : '○ OFF' + (s.t ? '　' + esc(s.t) + ' 消' : '　押すとON')}</i></button>`;
+  }).join('') + `</div>`;
+}
+function acToggle(name, on) {
+  const k = today();
+  S.ac[k] = S.ac[k] || {};
+  S.ac[k][name] = {on, t: hm(new Date())};
+  save();
+  const keep = shownAt; showScreen(); shownAt = keep;   // 自動切り替えの時間はそのまま
+  acCheck();
+  toast(name + 'のエアコンを' + (on ? 'ONにしました' : 'OFFにしました'), 2000);
+}
+/* 「10:00」「１０時」などを分に直す */
+function toMin(s) {
+  const m = String(s || '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).match(/(\d{1,2})\s*[:：時]\s*(\d{1,2})?/);
+  return m ? Number(m[1]) * 60 + Number(m[2] || 0) : null;
+}
+/* 来客の○分前（設定）から来客時刻の30分後まで、エアコンがOFFならどの画面でも赤い知らせを出す */
+function acCheck() {
+  let h = '';
+  const rs = acRooms();
+  if (rs.length && !document.body.classList.contains('editing')) {
+    const now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+    const lead = Math.max(5, Number(S.settings.ac.lead) || 30);
+    const after = Math.max(10, Number(S.settings.ac.off) || 120);
+    rs.forEach(r => {
+      const i = S.rooms.indexOf(r), st = acState(r);
+      const vs = (S.visitors[today()] || []).filter(v => v.room === i && (v.co || v.host))
+        .map(v => ({v, m: toMin(v.t)})).filter(x => x.m != null).sort((a, b) => a.m - b.m);
+      if (!st.on) {
+        const hit = vs.find(x => nm >= x.m - lead && nm <= x.m + 30);
+        if (hit) h += `<div class="aa"><span class="fit">⚠ ${esc(r)}　${esc(hit.v.t)}　${esc(hit.v.co || '')}<br><b>エアコンがOFFです</b></span><button data-acon="${esc(r)}">ONにした</button></div>`;
+        return;
+      }
+      // 消し忘れ：この後の来客が無く、最後の来客（来客が無ければONにした時刻）から設定の時間がたってもONのまま
+      if (vs.some(x => x.m > nm)) return;
+      const past = vs.filter(x => x.m <= nm), last = past[past.length - 1];
+      const base = Math.max(last ? last.m : 0, toMin(st.t) ?? 0);
+      if (nm >= base + after) h += `<div class="aa off"><span class="fit">${esc(r)}　${last ? '最後の来客 ' + esc(last.v.t) : esc(st.t) + 'にON'}<br><b>エアコンがONのままです</b></span><button data-acoff="${esc(r)}">OFFにした</button></div>`;
+    });
+  }
+  const el = $('#acAlert');
+  if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!h); shrink(el); }
+}
+$('#board').addEventListener('click', e => {
+  const b = e.target.closest('[data-ac],[data-acon],[data-acoff]');
+  if (!b) return;
+  if (b.dataset.acon) acToggle(b.dataset.acon, true);
+  else if (b.dataset.acoff) acToggle(b.dataset.acoff, false);
+  else acToggle(b.dataset.ac, !acState(b.dataset.ac).on);
+});
 /* はみ出す文字は自動で縮小する */
 function shrink(root) {
   root.querySelectorAll('.fit').forEach(el => {
@@ -485,6 +578,7 @@ function fit() {
 function tick() {
   const d = new Date();
   $('#clock').textContent = d.getHours() + ':' + pad(d.getMinutes());
+  acCheck();
   if (document.body.classList.contains('editing')) return;
   const l = cycleList(), sec = Math.max(5, Number(S.settings.interval) || 20);
   if (manual) { if (Date.now() - shownAt >= Math.max(60, sec) * 1000) { manual = null; showScreen(); } }
@@ -593,6 +687,18 @@ function renderEditor() {
         <label>部屋<textarea id="o-rooms">${esc(S.rooms.join('\n'))}</textarea></label>
         <label>行先のボタン<textarea id="o-quick">${esc(S.quick.join('\n'))}</textarea></label></div>
         <p class="note-s">部屋の順番を入れ替えると、入力済みの来客予定の部屋もずれます。名前を変えると、その人の入力済みの予定は表示されなくなります。</p></div>
+      <div class="card"><h2>エアコンの入れ忘れ防止（来客予定表）</h2>
+        <div class="opt"><label><input type="checkbox" id="ac-use" ${st.ac.use ? 'checked' : ''}>使う</label></div>
+        <p class="note-s" style="margin:4px 0">エアコンのある部屋</p>
+        <div class="opt">${S.rooms.map(r => `<label><input type="checkbox" data-acroom="${esc(r)}" ${st.ac.rooms.includes(r) ? 'checked' : ''}>${esc(r)}</label>`).join('') || '<span class="note-s">先に「部屋」を入れてください</span>'}</div>
+        <div class="form">
+          <label>使う時期（から）<span style="display:flex;gap:4px;align-items:center"><select id="ac-fm">${mOpt(st.ac.fm)}</select>月<select id="ac-fd">${dOpt(st.ac.fd)}</select>日</span></label>
+          <label>（まで）<span style="display:flex;gap:4px;align-items:center"><select id="ac-tm">${mOpt(st.ac.tm)}</select>月<select id="ac-td">${dOpt(st.ac.td)}</select>日</span></label>
+          <label>来客の何分前に知らせるか<input type="number" id="ac-lead" min="5" max="180" step="5" inputmode="numeric" value="${st.ac.lead}"></label>
+          <label>最後の来客から何分後に消し忘れを知らせるか<input type="number" id="ac-off" min="10" max="600" step="10" inputmode="numeric" value="${st.ac.off}"></label></div>
+        <p class="note-s">この時期だけ、来客予定表の下に「本日のエアコン」のボタンが出ます。エアコンを入れたら押してON、消したらもう一度押してOFFにします。<br>
+        来客の時刻の${st.ac.lead}分前になってもOFFのままだと、どの画面にも赤い知らせが出ます（その中の「ONにした」でも消せます）。<br>
+        その部屋のその日の来客がすべて終わり、最後の来客の時刻から${st.ac.off}分たってもONのままだと、黄色の知らせが出ます（「OFFにした」で消せます）。来客が無い日は、ONにした時刻から数えます。毎朝、全部OFFから始まります。</p></div>
       <div class="card"><h2>会社の休業日（土日・祝日以外）</h2>
         <div class="form"><label>休みの日（連休なら初日）<input type="date" id="off-a"></label><label>連休の最終日（1日だけなら空欄）<input type="date" id="off-b"></label>
           <button class="b p" id="off-add">追加</button></div>
@@ -685,6 +791,15 @@ $('#panel').addEventListener('change', e => {
   else if (el.name === 'schsz') { S.settings.schSize = el.value; save(); }
   else if (el.name === 'rot') { S.settings.rotate = Number(el.value); save(); }
   else if (el.dataset.scr) { S.settings.screens[el.dataset.scr] = el.checked; save(); }
+  else if (el.id === 'ac-use') { S.settings.ac.use = el.checked; save(); }
+  else if (el.dataset.acroom) {
+    const l = S.settings.ac.rooms.filter(r => r !== el.dataset.acroom);
+    if (el.checked) l.push(el.dataset.acroom);
+    S.settings.ac.rooms = l; save();
+  }
+  else if (['ac-fm', 'ac-fd', 'ac-tm', 'ac-td'].includes(el.id)) { S.settings.ac[el.id.slice(3)] = Number(el.value); save(); }
+  else if (el.id === 'ac-off') { S.settings.ac.off = Math.max(10, Math.min(600, Number(el.value) || 120)); save(); renderEditor(); }
+  else if (el.id === 'ac-lead') { S.settings.ac.lead = Math.max(5, Math.min(180, Number(el.value) || 30)); save(); renderEditor(); }
   else if (el.id === 'o-import' && el.files[0]) {
     el.files[0].text().then(txt => {
       const d = JSON.parse(txt);
@@ -759,7 +874,7 @@ const hash = location.hash.slice(1);
 if (SCREENS[hash]) forced = hash;
 addEventListener('resize', fit);
 document.addEventListener('visibilitychange', () => { keepAwake(); if (!document.body.classList.contains('editing')) showScreen(); });
-if (hash === 'edit') startEdit();
+if (hash.startsWith('edit')) { tab = hash.split('-')[1] || 'schedule'; startEdit(); }
 else if (!S.staffMain.length && !S.staffTokyo.length) { tab = 'settings'; startEdit(); }   // 初回は設定画面から
 else startDisplay();
 /* 一度開けば、以後はネットにつながっていなくても動くようにする */
