@@ -132,6 +132,23 @@ body.editing #stage{display:none}
 #zoom .zco{font-size:var(--fs);font-weight:800}
 #zoom .zho{font-size:calc(var(--fs) * .7);grid-column:1 / 3;font-weight:800;background:#fff4d6;border:2px solid #e6cf8f;border-radius:8px;padding:4px 18px}
 #zoom .zx{flex:0 0 auto;align-self:center;font-size:30px;font-weight:700;padding:10px 48px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--sub)}
+/* クローズアップの下：この後の来客と部屋の空き（小さめ） */
+#zoom .zn{flex:0 0 auto;display:flex;flex-direction:column;gap:6px;background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 18px 12px}
+#zoom .zn h4{margin:0;display:flex;justify-content:space-between;align-items:baseline;font-size:26px;font-weight:800;color:var(--sub);letter-spacing:2px}
+#zoom .zn h4 span{font-size:22px;letter-spacing:0}
+#zoom .zv{display:grid;grid-template-columns:3.3em 9em auto 1fr 5.5em;gap:10px;align-items:center;font-size:32px;font-weight:700;line-height:1.4}
+#zoom .zv > *{min-width:0}
+#zoom .zv .t{color:var(--navy);font-weight:800;font-variant-numeric:tabular-nums}
+#zoom .zv .rm{background:var(--label);color:var(--navy);border-radius:6px;padding:0 10px;font-size:28px}
+#zoom .zv .sm:not(:empty){background:#c25400;color:#fff;border-radius:6px;padding:0 10px;font-size:24px;font-weight:800}
+#zoom .zv .ho{color:var(--sub);font-size:28px;text-align:right}
+#zoom .zv0{font-size:28px;font-weight:700;color:#98a2ae}
+#zoom .zs{display:flex;flex-wrap:wrap;gap:8px;border-top:1px dashed var(--line);padding-top:8px}
+#zoom .zs span{display:flex;gap:10px;align-items:baseline;font-size:22px;font-weight:700;color:var(--sub);background:#f3f6f9;border:1px solid var(--line);border-radius:6px;padding:2px 12px}
+#zoom .zs b{color:var(--ink)}
+#zoom .zs .g{background:var(--navy2);border-color:var(--navy2);color:#fff}
+#zoom .zs .g b{color:#fff}
+#zoom .zs .e b{color:#1f7a3a}
 /* 夜間 */
 #night{position:absolute;inset:0;z-index:20;background:#000;display:none;place-items:center;text-align:center}
 #night.on{display:grid}
@@ -232,7 +249,7 @@ body.editing #editor{display:block}
 
 <div id="editor" class="ed">
   <div class="etop">
-    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v20</small></h1>
+    <h1>社内掲示ボード 入力 <small style="font-weight:400;opacity:.7">v21</small></h1>
     <div class="tabs" id="tabs">
       <button data-tab="schedule">行動予定</button>
       <button data-tab="visitors">来客予定</button>
@@ -579,9 +596,29 @@ function zoomCheck() {
       <div class="zt">${esc(x.v.t)}</div>
       <div class="zco fit">${esc(x.v.co || '')}</div>
       <div class="zho fit">担当　${esc(x.v.host || '')}</div></div>`).join('') +
-    `</div><button class="zx" data-zclose>閉じる</button>`;
+    `</div>` + zoomNext(l, nowMin()) + `<button class="zx" data-zclose>閉じる</button>`;
   if (el.dataset.h !== h) { el.dataset.h = h; el.innerHTML = h; el.classList.toggle('on', !!n); if (n) shrink(el); }
   zpad();
+}
+/* クローズアップの下に小さく、この後の来客（時刻・部屋・来客・担当）と部屋の空きを出す。案内する人が次の動きを判断できるように */
+function zoomNext(l, nm) {
+  const on = new Set(l.map(x => zkey(x.v))), here = new Set(l.map(x => x.v.room));
+  const all = (S.visitors[today()] || []).filter(v => v.co || v.host).map(v => ({v, m: toMin(v.t)}))
+    .filter(x => x.m != null && x.m >= nm && !on.has(zkey(x.v))).sort((a, b) => a.m - b.m || a.v.room - b.v.room);
+  const max = l.length >= 3 ? 2 : 3, nx = all.slice(0, max);
+  // 同じ部屋に次の来客があるとき、いまの来客から何分あとか（部屋を空けるまでの目安）
+  const gap = x => { const d = x.m - l.find(y => y.v.room === x.v.room).m, hh = Math.floor(d / 60), mm = d % 60; return hh ? hh + '時間' + (mm ? mm + '分' : '') : mm + '分'; };
+  let h = `<div class="zn"><h4>この後のご来客${all.length > max ? `<span>ほか${all.length - max}件</span>` : ''}</h4>`;
+  h += !nx.length ? `<div class="zv0">本日、この後のご来客はありません</div>` : nx.map(x => `<div class="zv">
+      <div class="t">${esc(x.v.t)}</div><div class="rm fit">${esc(S.rooms[x.v.room] || '')}</div>
+      <div class="sm">${here.has(x.v.room) ? '同じ部屋・' + gap(x) + '後' : ''}</div>
+      <div class="co fit">${esc(x.v.co || '')}</div><div class="ho fit">${esc(x.v.host || '')}</div></div>`).join('');
+  // 部屋ごとに、いま案内する部屋・次に使う時刻・空きを並べる
+  if (S.rooms.length > 1) h += `<div class="zs">` + S.rooms.map((r, i) => {
+    const nxt = all.find(x => x.v.room === i);
+    return `<span class="${here.has(i) ? 'g' : nxt ? '' : 'e'}">${esc(r)}<b>${here.has(i) ? 'ご案内先' : nxt ? '次 ' + esc(nxt.v.t) : '空き'}</b></span>`;
+  }).join('') + `</div>`;
+  return h + `</div>`;
 }
 /* クローズアップ中にお知らせが出たら、お知らせの高さだけ来客の表示を上に詰める（担当や「閉じる」を隠さない） */
 function zpad() {
